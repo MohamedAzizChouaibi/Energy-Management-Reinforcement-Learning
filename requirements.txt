@@ -1,0 +1,31 @@
+# =========================
+# Core RL + Simulation Stack
+# =========================
+stable-baselines3[extra]
+gymnasium==0.29.1
+
+# PyTorch (CPU build by default)
+torch
+torchvision
+torchaudio
+
+# RL / Inference / Logging
+onnxruntime
+tensorboard
+
+# =========================
+# Data + Visualization Stack
+# =========================
+numpy
+pandas
+matplotlib
+plotly
+streamlit
+
+# =========================
+# Optional / Hardware-in-the-Loop
+# =========================
+python-can
+
+# Optional (install only if CARLA simulator is already installed)
+# carla
