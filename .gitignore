@@ -1,2 +1,4 @@
 pfa/
+__pycache__/
+*.py[cod]
 
