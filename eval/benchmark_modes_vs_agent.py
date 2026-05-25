@@ -13,6 +13,21 @@ Comparison axes (per cycle, per contender):
   - fuel_l_per_100km    fuel economy (volume, EU convention)
   - fuel_mpg            fuel economy (US convention)
   - co2_g               tailpipe CO2 (3.09 g per g gasoline)
+  Full energy consumption (fuel + electricity on a common basis)
+  - fuel_energy_kwh     chemical energy in the fuel burnt (gasoline LHV 43.4 MJ/kg)
+  - elec_storage_kwh    net electricity withdrawn from the pack over the cycle,
+                        from the SOC swing vs the 60% start (1.31 kWh full pack).
+                        Negative when a mode ends above target (banked charge).
+                        SOC-based, not p_batt-integrated: p_batt is not energy-
+                        conservative once SOC clips at 80%.
+  - total_energy_kwh    actual full energy this cycle: fuel_energy_kwh + elec_storage_kwh
+  - total_energy_mj     actual total, in MJ
+  - energy_wh_per_km    actual full energy consumption per km
+  - total_energy_corrected_kwh  HEADLINE: charge-balanced total. With SOC back at
+                        the 60% start the storage term is zero, so for this non-
+                        plug-in HEV it reduces to the fuel energy — the SOC-fair
+                        number to rank contenders on.
+  - energy_corr_wh_per_km       charge-balanced full energy per km
   Charge-sustaining / battery
   - soc_final_pct       how close to the 60% setpoint at the end
   - soc_rmse            SOC deviation from target across the whole cycle
@@ -36,6 +51,8 @@ Outputs:
   eval/figures/bench_fuel_total.png           grouped bar: total fuel (g)
   eval/figures/bench_fuel_per_km.png          grouped bar: fuel economy (g/km)
   eval/figures/bench_economy_co2.png          L/100km + CO2 bars
+  eval/figures/bench_full_energy.png          total energy (kWh) + energy per km
+  eval/figures/bench_energy_breakdown.png     stacked fuel vs net electricity (kWh)
   eval/figures/bench_soc_behaviour.png        SOC final + SOC RMSE bars
   eval/figures/bench_battery.png              battery energy + peak temp bars
   eval/figures/bench_ice_regen.png            ICE-on fraction + regen bars
@@ -73,6 +90,11 @@ DT_PROFILE_S = 1.0          # each profile sample represents 1 s of the drive cy
 SOC_TARGET_PCT = 60.0       # charge-sustaining setpoint (THSEnv.SOC_TARGET)
 GASOLINE_DENSITY_KG_L = 0.74    # used for volume <-> mass fuel conversion
 CO2_G_PER_G_FUEL = 3.09         # tailpipe CO2 per gram of gasoline burnt
+GASOLINE_LHV_MJ_PER_KG = 43.4   # lower heating value of gasoline
+FUEL_KWH_PER_G = GASOLINE_LHV_MJ_PER_KG / 1000.0 / 3.6  # ~0.01206 kWh per gram
+BATT_NOMINAL_V = 201.6          # THS-II NiMH pack nominal voltage (modeling.py)
+BATT_CAPACITY_AH = 6.5          # THS-II NiMH pack capacity (modeling.py)
+PACK_ENERGY_KWH = BATT_NOMINAL_V * BATT_CAPACITY_AH / 1000.0  # ~1.31 kWh full swing
 
 FIGURE_DIR = PROJECT_ROOT / "eval" / "figures"
 KPI_CSV = PROJECT_ROOT / "eval" / "benchmark_modes_kpis.csv"
@@ -140,6 +162,22 @@ def compute_kpis(df: pd.DataFrame, cycle: str, label: str) -> dict:
     regen_w = np.where(~ice_on, np.maximum(0.0, -p_batt), 0.0) * 1000.0
     regen_kj = float(np.sum(regen_w * DT_PROFILE_S) / 1000.0)
 
+    # Full energy consumption: put fuel and electricity on a common kWh basis.
+    # Fuel chemical energy via the gasoline LHV. For electricity we use the NET
+    # energy withdrawn from storage, derived from the SOC swing rather than the
+    # p_batt integral: SOC clips at BATT_SOC_MAX (80%), after which p_batt keeps
+    # reporting charge power that the pack cannot actually store, so integrating
+    # it is not energy-conservative. The SOC delta is bounded by the 1.31 kWh
+    # pack and is the physically meaningful "electricity consumed" term.
+    fuel_energy_kwh = total_fuel_g * FUEL_KWH_PER_G
+    elec_storage_kwh = (SOC_TARGET_PCT - float(soc[-1])) / 100.0 * PACK_ENERGY_KWH
+    # Actual full energy this cycle (positive elec = drew down the pack).
+    total_energy_kwh = fuel_energy_kwh + elec_storage_kwh
+    # Charge-balanced headline: with SOC returned to the 60% start the storage
+    # term is zero, so for this non-plug-in HEV the full energy reduces to the
+    # fuel energy. This is the SOC-fair number to compare contenders on.
+    total_energy_corrected_kwh = fuel_energy_kwh
+
     # Engine starts = off -> on transitions (drivability / wear proxy).
     ice_starts = int(np.sum((~ice_on[:-1]) & ice_on[1:])) if len(ice_on) > 1 else int(ice_on[0])
     mean_ice_rpm = float(df.loc[ice_on, "ice_rpm"].mean()) if ice_on.any() else 0.0
@@ -159,6 +197,15 @@ def compute_kpis(df: pd.DataFrame, cycle: str, label: str) -> dict:
         "fuel_mpg":               round(mpg, 2),
         "co2_g":                  round(co2_g, 2),
         "distance_km":            round(dist_km, 3),
+        # full energy consumption (fuel + electricity)
+        "fuel_energy_kwh":        round(fuel_energy_kwh, 4),
+        "elec_storage_kwh":       round(elec_storage_kwh, 4),
+        "total_energy_kwh":       round(total_energy_kwh, 4),
+        "total_energy_mj":        round(total_energy_kwh * 3.6, 3),
+        "energy_wh_per_km":       round(total_energy_kwh * 1000.0 / dist_km, 2) if dist_km > 0 else float("nan"),
+        # SOC-corrected (charge-balanced) headline energy
+        "total_energy_corrected_kwh": round(total_energy_corrected_kwh, 4),
+        "energy_corr_wh_per_km":  round(total_energy_corrected_kwh * 1000.0 / dist_km, 2) if dist_km > 0 else float("nan"),
         # charge-sustaining / battery
         "soc_final_pct":          round(float(soc[-1]), 2),
         "soc_rmse":               round(float(np.sqrt(np.mean((soc - SOC_TARGET_PCT) ** 2))), 4),
@@ -315,6 +362,41 @@ def save_soc_traces(traces: dict, cycles: list[str], out: Path) -> Path:
     return out
 
 
+def save_energy_breakdown(kpis: pd.DataFrame, cycles: list[str], out: Path) -> Path:
+    """Grouped bars per cycle: fuel chemical energy beside the net battery
+    electricity drawn from the pack (SOC swing). Electricity dips below zero
+    when a mode ends above the 60% SOC start (banked charge). A black marker
+    shows the actual full energy (fuel + electricity) for each contender."""
+    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
+    n = len(cycles)
+    fig, axes = plt.subplots(1, n, figsize=(4.6 * n, 5.2), sharey=True)
+    axes = np.atleast_1d(axes)
+    x = np.arange(len(CONTENDERS))
+    width = 0.38
+    for ax, cycle in zip(axes, cycles):
+        sub = kpis[kpis["cycle"] == cycle]
+        fuel = np.array([float(sub[sub["contender"] == c]["fuel_energy_kwh"].iloc[0]) for c in CONTENDERS])
+        elec = np.array([float(sub[sub["contender"] == c]["elec_storage_kwh"].iloc[0]) for c in CONTENDERS])
+        ax.bar(x - width / 2, fuel, width, color="#e15759", label="Fuel energy", zorder=2)
+        ax.bar(x + width / 2, elec, width, color="#4e79a7", label="Net electricity (SOC swing)", zorder=2)
+        ax.scatter(x, fuel + elec, marker="_", s=260, color="black",
+                   linewidths=2.0, label="Actual full energy", zorder=4)
+        for xi, t in zip(x, fuel + elec):
+            ax.text(xi, t, f"{t:.2f}", ha="center", va="bottom", fontsize=7)
+        ax.axhline(0, color="black", linewidth=0.6)
+        ax.set_xticks(x)
+        ax.set_xticklabels(CONTENDERS, fontsize=8)
+        ax.set_title(cycle)
+        ax.grid(axis="y", alpha=0.3)
+    axes[0].set_ylabel("Energy (kWh)")
+    axes[0].legend(fontsize=8)
+    fig.suptitle("Full energy consumption: fuel vs net electricity (actual SOC swing)", fontsize=13)
+    plt.tight_layout()
+    plt.savefig(out, dpi=200)
+    plt.close()
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
@@ -327,6 +409,8 @@ def print_table(kpis: pd.DataFrame, cycles: list[str]) -> None:
         ("L/100km",  lambda r: f"{r['fuel_l_per_100km']:>9.2f}"),
         ("mpg",      lambda r: f"{r['fuel_mpg']:>8.1f}"),
         ("CO2(g)",   lambda r: f"{r['co2_g']:>9.1f}"),
+        ("E_bal(kWh)", lambda r: f"{r['total_energy_corrected_kwh']:>11.3f}"),
+        ("E_act(kWh)", lambda r: f"{r['total_energy_kwh']:>11.3f}"),
     ]
     block_b = [
         ("SOC_f%",    lambda r: f"{r['soc_final_pct']:>9.1f}"),
@@ -412,6 +496,12 @@ def main() -> None:
                           ("co2_g", "CO2 (g)", "Tailpipe CO2")],
                          "Economy & Emissions: Fixed Modes vs PPO Agent",
                          args.cycles, FIGURE_DIR / "bench_economy_co2.png"),
+        save_paired_bars(kpis,
+                         [("total_energy_corrected_kwh", "Total energy (kWh)", "Full energy, SOC-corrected"),
+                          ("energy_corr_wh_per_km", "Energy (Wh/km)", "Full energy per km, SOC-corrected")],
+                         "Full Energy Consumption (SOC-corrected): Fixed Modes vs PPO Agent",
+                         args.cycles, FIGURE_DIR / "bench_full_energy.png"),
+        save_energy_breakdown(kpis, args.cycles, FIGURE_DIR / "bench_energy_breakdown.png"),
         save_paired_bars(kpis,
                          [("soc_final_pct", "Final SOC (%)", "Charge-sustaining (target 60%)"),
                           ("soc_rmse", "SOC RMSE (%)", "SOC deviation from target")],
