@@ -1,4 +1,6 @@
 pfa/
+.venv/
+.tmp/
 __pycache__/
 *.py[cod]
 
