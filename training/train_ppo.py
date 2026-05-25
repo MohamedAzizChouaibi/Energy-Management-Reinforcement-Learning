@@ -22,6 +22,7 @@ from env.ths_env import THSEnv
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train PPO on THSEnv for Day 2D.")
     parser.add_argument("--cycle", default="WLTC", choices=("WLTC", "FTP75", "US06"))
+    parser.add_argument("--route-cache", default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--total-timesteps", type=int, default=500_000)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
@@ -39,8 +40,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def make_env(cycle: str, seed: int) -> Monitor:
-    env = THSEnv(cycle)
+def make_env(cycle: str, seed: int, route_cache: str | None = None) -> Monitor:
+    env = THSEnv(cycle, route_cache=route_cache)
     env.reset(seed=seed)
     return Monitor(env)
 
@@ -54,8 +55,8 @@ def main() -> None:
     tensorboard_log = Path(args.tensorboard_log)
     tensorboard_log.mkdir(parents=True, exist_ok=True)
 
-    train_env = make_env(args.cycle, args.seed)
-    eval_env = make_env(args.cycle, args.seed + 1)
+    train_env = make_env(args.cycle, args.seed, args.route_cache)
+    eval_env = make_env(args.cycle, args.seed + 1, args.route_cache)
 
     eval_callback = EvalCallback(
         eval_env,

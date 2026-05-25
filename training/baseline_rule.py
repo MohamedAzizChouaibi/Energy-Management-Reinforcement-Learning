@@ -18,9 +18,10 @@ if str(PROJECT_ROOT) not in sys.path:
 from env.ths_env import THSEnv
 
 
-ACTION_ECO = 0
-ACTION_NORMAL = 1
-ACTION_PWR = 2
+ACTION_EV = 0
+ACTION_ECO = 1
+ACTION_NORMAL = 2
+ACTION_PWR = 3
 
 
 def parse_args() -> argparse.Namespace:
@@ -31,9 +32,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def rule_action(speed_ms: float) -> int:
-    """ECO below 15 km/h, NORMAL below 80 km/h, PWR otherwise."""
+def rule_action(speed_ms: float, soc: float) -> int:
+    """EV if crawl speed and SOC allows, then ECO/NORMAL/PWR by speed."""
     speed_kmh = speed_ms * 3.6
+    if speed_kmh < 5.0 and soc >= 0.45:
+        return ACTION_EV
     if speed_kmh < 15.0:
         return ACTION_ECO
     if speed_kmh < 80.0:
@@ -53,7 +56,8 @@ def run_baseline(cycle: str, seed: int) -> tuple[list[dict[str, float | int | st
 
     while not (done or truncated):
         speed_before_ms = float(env.speed)
-        action = rule_action(speed_before_ms)
+        soc_before = float(env.ems.state.soc) if env.ems is not None else 0.60
+        action = rule_action(speed_before_ms, soc_before)
         _, reward, done, truncated, info = env.step(action)
 
         fuel_step_g = float(info["fuel_rate_gs"]) * env.dt

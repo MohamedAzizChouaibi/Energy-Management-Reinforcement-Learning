@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 import gymnasium as gym
 import numpy as np
-from gymnasium.envs.registration import EnvSpec
 from gymnasium import spaces
+from gymnasium.envs.registration import EnvSpec
 
 from modeling import (
     AF_M2,
@@ -27,15 +28,15 @@ from modeling import (
 
 
 class THSEnv(gym.Env):
-    """Discrete drive-mode control environment for THS-II EMS training."""
+    """Discrete EV/ECO/NORMAL/PWR control environment for THS-II EMS training."""
 
     metadata = {"render_modes": []}
 
     ACTION_TO_MODE = (
+        DriveMode.EV,
         DriveMode.ECO,
         DriveMode.NORMAL,
         DriveMode.PWR,
-        DriveMode.EV,
     )
     CYCLE_FILES = {
         "WLTC": "WLTC.csv",
@@ -43,14 +44,19 @@ class THSEnv(gym.Env):
         "US06": "US06.csv",
     }
 
-    def __init__(self, cycle: str = "WLTC", dt: float = 0.1):
+    def __init__(self, cycle: str = "WLTC", dt: float = 0.1, route_cache: str | Path | None = None):
         super().__init__()
         self.cycle_name = self._normalize_cycle_name(cycle)
         self.dt = float(dt)
+        self.route_cache = Path(route_cache) if route_cache is not None else None
         self.spec = EnvSpec(
             id="THSEnv-v0",
             entry_point="env.ths_env:THSEnv",
-            kwargs={"cycle": self.cycle_name, "dt": self.dt},
+            kwargs={
+                "cycle": self.cycle_name,
+                "dt": self.dt,
+                "route_cache": str(self.route_cache) if self.route_cache is not None else None,
+            },
             max_episode_steps=None,
         )
         self.cycle_path = (
@@ -60,9 +66,9 @@ class THSEnv(gym.Env):
         )
 
         self.observation_space = spaces.Box(
-            low=0.0,
+            low=-1.0,
             high=1.0,
-            shape=(5,),
+            shape=(8,),
             dtype=np.float32,
         )
         self.action_space = spaces.Discrete(len(self.ACTION_TO_MODE))
@@ -71,7 +77,9 @@ class THSEnv(gym.Env):
         self.pi_ctrl: SpeedTrackingPI | None = None
         self.profile = np.empty(0, dtype=np.float64)
         self.grade_profile = np.empty(0, dtype=np.float64)
+        self.route_segments: list[dict[str, Any]] = []
         self.idx = 0
+        self.distance_m = 0.0
         self.speed = 0.0
         self.grade = 0.0
         self.accel = 0.0
@@ -86,7 +94,9 @@ class THSEnv(gym.Env):
         self.pi_ctrl = SpeedTrackingPI()
         self.profile = load_drive_cycle(self.cycle_name)
         self.grade_profile = self._load_grade_profile()
+        self.route_segments = self._load_route_segments()
         self.idx = 0
+        self.distance_m = 0.0
         self.speed = 0.0
         self.grade = float(self.grade_profile[0]) if len(self.grade_profile) else 0.0
         self.accel = 0.0
@@ -104,7 +114,11 @@ class THSEnv(gym.Env):
         self.ems.state.selector_auto = False
 
         target_speed = float(self.profile[min(self.idx, len(self.profile) - 1)])
-        self.grade = float(self.grade_profile[min(self.idx, len(self.grade_profile) - 1)])
+        route_segment = self._current_route_segment()
+        if route_segment is not None:
+            self.grade = float(route_segment.get("grade_rad", route_segment.get("gps_lookahead_grade", 0.0)))
+        else:
+            self.grade = float(self.grade_profile[min(self.idx, len(self.grade_profile) - 1)])
 
         throttle, brake = self.pi_ctrl.step(target_speed, self.speed, self.dt)
         prev_speed = self.speed
@@ -118,6 +132,7 @@ class THSEnv(gym.Env):
 
         self._advance_vehicle_speed(out, brake)
         self.accel = (self.speed - prev_speed) / self.dt if self.dt > 0 else 0.0
+        self.distance_m += self.speed * self.dt
         self.idx += 1
         self.last_out = out
 
@@ -130,6 +145,8 @@ class THSEnv(gym.Env):
                 "throttle": throttle,
                 "brake": brake,
                 "grade_rad": self.grade,
+                "distance_m": self.distance_m,
+                "route_segment": route_segment,
                 "reward_raw": float(reward_raw),
             }
         )
@@ -141,13 +158,17 @@ class THSEnv(gym.Env):
         if self.ems is not None:
             soc = float(self.ems.state.soc)
 
+        gps_grade, gps_segment, gps_traffic = self._gps_features()
         obs = np.array(
             [
                 self.speed / 30.0,
-                soc,
+                (soc - 0.60) / 0.20,
                 self.grade / 0.3,
-                self._segment_type(self.speed) / 2.0,
+                self._segment_norm(self._segment_type(self.speed)),
                 self.accel / 5.0,
+                gps_grade,
+                gps_segment,
+                gps_traffic,
             ],
             dtype=np.float32,
         )
@@ -178,6 +199,37 @@ class THSEnv(gym.Env):
                 return grade
         return np.zeros_like(self.profile, dtype=np.float64)
 
+    def _load_route_segments(self) -> list[dict[str, Any]]:
+        if self.route_cache is None:
+            return []
+        with self.route_cache.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        segments = payload.get("segments", payload) if isinstance(payload, dict) else payload
+        if not isinstance(segments, list):
+            raise ValueError("route_cache must contain a list of RouteSegment dictionaries.")
+        return [dict(segment) for segment in segments]
+
+    def _current_route_segment(self) -> dict[str, Any] | None:
+        if not self.route_segments:
+            return None
+        for segment in self.route_segments:
+            start_m = float(segment.get("start_m", segment.get("start_distance_m", 0.0)))
+            end_m = float(segment.get("end_m", segment.get("end_distance_m", np.inf)))
+            if start_m <= self.distance_m < end_m:
+                return segment
+        return self.route_segments[-1]
+
+    def _gps_features(self) -> tuple[float, float, float]:
+        segment = self._current_route_segment()
+        if segment is None:
+            return 0.0, 0.0, 0.0
+
+        grade = float(segment.get("gps_lookahead_grade", segment.get("grade_rad", 0.0))) / 0.3
+        segment_type = int(segment.get("segment_type", self._segment_type(self.speed)))
+        traffic_density = float(segment.get("traffic_density", 0.5))
+        traffic_norm = traffic_density * 2.0 - 1.0
+        return float(grade), self._segment_norm(segment_type), float(traffic_norm)
+
     @classmethod
     def _normalize_cycle_name(cls, cycle: str) -> str:
         name = cycle.upper().replace("-", "")
@@ -195,3 +247,7 @@ class THSEnv(gym.Env):
         if speed_kmh < 80.0:
             return 1
         return 2
+
+    @staticmethod
+    def _segment_norm(segment_type: int) -> float:
+        return {0: -1.0, 1: 0.0, 2: 1.0}.get(int(segment_type), 0.0)

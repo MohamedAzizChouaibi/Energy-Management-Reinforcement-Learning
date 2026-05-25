@@ -5,15 +5,16 @@
   "done": true,
   "truncated": false,
   "dt_s": 0.1,
-  "total_fuel_g": 86.57945515081299,
+  "total_fuel_g": 85.37017258592826,
   "final_soc_pct": 80.0,
-  "mean_soc_deviation_pct": 11.216568935773871,
+  "mean_soc_deviation_pct": 10.69361781556739,
   "max_soc_deviation_pct": 20.0,
-  "min_soc_pct": 59.90518721722818,
+  "min_soc_pct": 59.8117201022616,
   "max_soc_pct": 80.0,
   "mode_counts": {
-    "ECO": 351,
-    "NORMAL": 1110,
+    "ECO": 153,
+    "EV": 193,
+    "NORMAL": 1115,
     "PWR": 339
   }
 }
