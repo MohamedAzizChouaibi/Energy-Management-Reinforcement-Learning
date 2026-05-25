@@ -1,0 +1,4 @@
+cycle,label,total_fuel_g,fuel_per_km,soc_final,soc_rmse,soc_min,regen_total_j,ice_on_fraction,ev_fraction,episode_steps,early_termination
+WLTC,PPO,17.94,0.7712,54.21,8.213,46.12,13641991.3,0.1428,0.41,1800,False
+FTP75,PPO,16.58,0.9331,46.37,10.7702,45.05,14153794.7,0.1403,0.3622,2474,False
+US06,PPO,10.43,0.8094,56.28,4.239,53.0,4140046.2,0.3339,0.3205,596,False

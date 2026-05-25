@@ -44,6 +44,22 @@ class THSEnv(gym.Env):
         "US06": "US06.csv",
     }
 
+    # --- Charge-sustaining reward parameters ------------------------------
+    # Goal: minimise fuel while keeping SOC near target. Battery energy is a
+    # buffer, not a free fuel source. A quadratic SOC penalty punishes BOTH
+    # draining (the "always-EV" trap) and overcharging (the "always-ECO" trap);
+    # crucially we do NOT credit charging, which otherwise lets the agent run
+    # the engine to bank charge for reward. Regen capture is rewarded only when
+    # the engine is off, i.e. genuine braking recovery.
+    SOC_TARGET = 0.60                  # charge-sustaining setpoint
+    SOC_DEADBAND = 0.02                # flat zone around target to avoid jitter
+    SOC_FLOOR = 0.40                   # episode terminates below this
+    SOC_PENALTY_K = 120.0              # g-equiv per (SOC excursion beyond band)^2
+    TERMINAL_SOC_K = 300.0             # terminal charge-sustaining penalty weight
+    DEPLETION_PENALTY = 50.0           # extra penalty for hitting the SOC floor
+    REGEN_BONUS_K = 0.002              # reward per kW of engine-off regen capture
+    REWARD_CLIP = 10.0                 # clip the per-step running cost
+
     def __init__(self, cycle: str = "WLTC", dt: float = 0.1, route_cache: str | Path | None = None):
         super().__init__()
         self.cycle_name = self._normalize_cycle_name(cycle)
@@ -127,8 +143,18 @@ class THSEnv(gym.Env):
         soc = float(out["soc_pct"]) / 100.0
         fuel_rate_gs = float(out["fuel_rate_gs"])
         p_batt_kw = float(out["p_batt_kw"])
-        reward_raw = -fuel_rate_gs - 10.0 * (soc - 0.60) ** 2 + 0.005 * max(0.0, -p_batt_kw)
-        reward = float(np.clip(reward_raw, -1.999, -1e-9))
+        ice_on = bool(out.get("ice_on", False))
+
+        # Charge-sustaining SOC penalty: a symmetric quadratic about the target
+        # (with a small deadband) that punishes draining and overcharging alike.
+        soc_excursion = max(0.0, abs(soc - self.SOC_TARGET) - self.SOC_DEADBAND)
+        soc_penalty = self.SOC_PENALTY_K * soc_excursion ** 2
+
+        # Reward genuine regenerative braking (engine off, energy into pack).
+        regen_bonus = self.REGEN_BONUS_K * max(0.0, -p_batt_kw) if not ice_on else 0.0
+
+        running_cost = fuel_rate_gs + soc_penalty - regen_bonus
+        reward = -float(np.clip(running_cost, -self.REWARD_CLIP, self.REWARD_CLIP))
 
         self._advance_vehicle_speed(out, brake)
         self.accel = (self.speed - prev_speed) / self.dt if self.dt > 0 else 0.0
@@ -136,7 +162,16 @@ class THSEnv(gym.Env):
         self.idx += 1
         self.last_out = out
 
-        done = self.idx >= len(self.profile) or soc < 0.40
+        depleted = soc < self.SOC_FLOOR
+        done = self.idx >= len(self.profile) or depleted
+
+        # Terminal charge-sustaining penalty: a fair fuel comparison requires
+        # the episode to end near the SOC setpoint. Borrowing or banking charge
+        # is settled here so the agent cannot win by ending depleted or stuffed.
+        if done:
+            reward -= self.TERMINAL_SOC_K * (soc - self.SOC_TARGET) ** 2
+        if depleted:
+            reward -= self.DEPLETION_PENALTY
         info = dict(out)
         info.update(
             {
@@ -147,7 +182,9 @@ class THSEnv(gym.Env):
                 "grade_rad": self.grade,
                 "distance_m": self.distance_m,
                 "route_segment": route_segment,
-                "reward_raw": float(reward_raw),
+                "soc_penalty": float(soc_penalty),
+                "regen_bonus": float(regen_bonus),
+                "reward": float(reward),
             }
         )
 
