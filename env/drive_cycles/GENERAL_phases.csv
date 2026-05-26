@@ -1,0 +1,10 @@
+phase,start_s,end_s,distance_km
+cold_idle,0,15,0.000
+urban,15,248,1.613
+congestion,248,388,0.259
+rural,388,592,3.995
+mountain_up,592,727,1.919
+mountain_down,727,873,3.019
+motorway,873,1112,7.665
+motorway_traffic,1112,1283,4.890
+slowdown,1283,1327,0.578

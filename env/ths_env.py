@@ -42,6 +42,7 @@ class THSEnv(gym.Env):
         "WLTC": "WLTC.csv",
         "FTP75": "FTP75.csv",
         "US06": "US06.csv",
+        "GENERAL": "GENERAL.csv",
     }
 
     # --- Charge-sustaining reward parameters ------------------------------

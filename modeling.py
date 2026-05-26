@@ -456,9 +456,13 @@ assert len(FTP75_PROFILE) == 2474, (
 
 
 DRIVE_CYCLE_SPECS = {
-    'WLTC':  dict(filename='WLTC.csv',  expected_len=1800),
-    'FTP75': dict(filename='FTP75.csv', expected_len=2474),
-    'US06':  dict(filename='US06.csv',  expected_len=596),
+    'WLTC':    dict(filename='WLTC.csv',    expected_len=1800),
+    'FTP75':   dict(filename='FTP75.csv',   expected_len=2474),
+    'US06':    dict(filename='US06.csv',    expected_len=596),
+    # GENERAL: synthetic all-regime cycle (urban / congestion / rural /
+    # mountain ±8% / motorway / motorway-traffic). Built by
+    # env/drive_cycles/build_general_cycle.py; carries a road_grade_rad column.
+    'GENERAL': dict(filename='GENERAL.csv', expected_len=1327),
 }
 
 
