@@ -47,6 +47,19 @@ MODEL_PATH = PROJECT_ROOT / "models" / "best_model.zip"
 SIL_KPIS = PROJECT_ROOT / "eval" / "sil_kpis.csv"
 DEFAULT_ROUTE = PROJECT_ROOT / "gps" / "cache" / "sample_route_cache.json"
 
+# TomTom Map Display raster tiles (Day 4). {key} is filled at render time.
+TOMTOM_BASE_TILE = "https://{s}.api.tomtom.com/map/1/tile/basic/main/{z}/{x}/{y}.png?key={key}"
+TOMTOM_FLOW_TILE = "https://{s}.api.tomtom.com/map/1/tile/flow/relative0/{z}/{x}/{y}.png?key={key}"
+
+
+def _tomtom_key() -> str | None:
+    """TomTom key from .env, or None if unset (falls back to OSM tiles)."""
+    try:
+        from gps._config import get_key
+        return get_key("TOMTOM_API_KEY")
+    except SystemExit:
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Cached resources
@@ -65,6 +78,26 @@ def load_sil_kpis() -> pd.DataFrame | None:
     if SIL_KPIS.exists():
         return pd.read_csv(SIL_KPIS)
     return None
+
+
+@st.cache_data(show_spinner=False)
+def fetch_tomtom_route(from_q: str, to_q: str, segment_m: float) -> tuple[dict, str]:
+    """Day 4 pipeline: TomTom route + OpenTopography grade -> RouteSegment cache.
+
+    Returns (payload, cache_path). Cached per (from, to, segment_m) so re-runs
+    in a session are instant; the underlying API responses are also disk-cached.
+    """
+    from gps.route_fetcher import fetch_route_data, _slug
+    from gps.elevation import elevations_along_route
+    from gps.segmenter import build_segments, save_segments
+
+    route = fetch_route_data(from_q, to_q)
+    elevations = elevations_along_route(route.points)
+    segments = build_segments(route, elevations, segment_m=segment_m)
+    out = (PROJECT_ROOT / "gps" / "cache" /
+           f"route_{_slug(route.origin.address)}_{_slug(route.destination.address)}_segments.json")
+    save_segments(segments, route, out)
+    return json.loads(out.read_text(encoding="utf-8")), str(out)
 
 
 # ---------------------------------------------------------------------------
@@ -184,15 +217,19 @@ def mode_donut(df: pd.DataFrame):
 
 
 def build_route_map(route_payload: dict):
-    """Folium map of the route polyline, coloured by recommended mode/segment."""
+    """Folium map of the route polyline, coloured by recommended mode/segment.
+
+    Uses TomTom Map Display raster tiles with an optional live traffic-flow
+    overlay when a TomTom key is configured; otherwise falls back to OSM.
+    """
     import folium
 
     segments = route_payload.get("segments", route_payload) if isinstance(route_payload, dict) else route_payload
     coords = route_payload.get("waypoints") if isinstance(route_payload, dict) else None
 
     # If no explicit coordinates, synthesise a polyline from segment distances
-    # so the panel always renders something meaningful.
-    origin = (36.8065, 10.1815)  # Tunis, default origin
+    # so the panel always renders something meaningful (legacy sample routes).
+    origin = (48.1371, 11.5754)  # Munich, default origin
     if not coords:
         coords = []
         running_m = 0.0
@@ -205,7 +242,25 @@ def build_route_map(route_payload: dict):
                 coords.append((origin[0] + d * deg_per_m, origin[1] + d * deg_per_m * 0.4))
             running_m = end_m
 
-    fmap = folium.Map(location=list(coords[0]), zoom_start=14, tiles="OpenStreetMap")
+    key = _tomtom_key()
+    if key:
+        fmap = folium.Map(location=list(coords[0]), zoom_start=10,
+                          tiles=TOMTOM_BASE_TILE.format(s="{s}", z="{z}", x="{x}", y="{y}", key=key),
+                          attr="TomTom", subdomains="abcd")
+        folium.TileLayer(
+            tiles=TOMTOM_FLOW_TILE.format(s="{s}", z="{z}", x="{x}", y="{y}", key=key),
+            attr="TomTom Traffic", subdomains="abcd",
+            name="Live traffic flow", overlay=True, control=True, show=False,
+        ).add_to(fmap)
+        folium.LayerControl(collapsed=True).add_to(fmap)
+    else:
+        fmap = folium.Map(location=list(coords[0]), zoom_start=10, tiles="OpenStreetMap")
+
+    # Fit the view to the whole route.
+    lats = [c[0] for c in coords]
+    lons = [c[1] for c in coords]
+    fmap.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
+
     idx = 0
     for seg in segments:
         seg_type = int(seg.get("segment_type", 1))
@@ -240,16 +295,43 @@ def main() -> None:
     st.sidebar.header("Configuration")
     cycle = st.sidebar.selectbox("Drive cycle", CYCLES)
     agent_mode = st.sidebar.radio("Agent mode", ("RL PPO", "Rule-based", "Random"))
-    uploaded = st.sidebar.file_uploader("GPS route JSON (optional)", type=["json"])
+
+    # --- Day 4: live route from TomTom -------------------------------------
+    st.sidebar.subheader("Route (TomTom)")
+    has_key = _tomtom_key() is not None
+    if not has_key:
+        st.sidebar.warning("Set TOMTOM_API_KEY in .env to fetch live routes.")
+    col_a, col_b = st.sidebar.columns(2)
+    from_q = col_a.text_input("From", value="Munich")
+    to_q = col_b.text_input("To", value="Stuttgart")
+    segment_m = st.sidebar.slider("Segment length (m)", 100, 1000, 200, step=50)
+    fetch = st.sidebar.button("Fetch route (TomTom)", disabled=not has_key)
+
+    uploaded = st.sidebar.file_uploader("…or upload GPS route JSON", type=["json"])
     use_default_route = st.sidebar.checkbox(
         "Use bundled sample route", value=False,
-        help=f"Loads {DEFAULT_ROUTE.name} if no file uploaded.")
+        help=f"Loads {DEFAULT_ROUTE.name} if no route fetched/uploaded.")
     run = st.sidebar.button("Run Episode", type="primary")
+
+    # Fetch on demand; persist across reruns in session_state.
+    if fetch:
+        try:
+            with st.spinner(f"Fetching {from_q} -> {to_q} from TomTom + OpenTopography ..."):
+                payload, path = fetch_tomtom_route(from_q, to_q, float(segment_m))
+            st.session_state["fetched_route"] = {"payload": payload, "path": path}
+            sc = payload.get("segment_counts", {})
+            st.sidebar.success(
+                f"{payload['origin']['address']} → {payload['destination']['address']}  "
+                f"({payload['length_m']/1000:.0f} km, {len(payload['segments'])} segs: "
+                f"{sc.get('urban',0)}u/{sc.get('suburban',0)}s/{sc.get('highway',0)}h)")
+        except Exception as exc:
+            st.sidebar.error(f"Route fetch failed: {exc}")
 
     if model is None and agent_mode == "RL PPO":
         st.sidebar.error(f"Model not found at {MODEL_PATH}. Choose Rule-based or Random.")
 
     # --- resolve route -----------------------------------------------------
+    # Priority: uploaded JSON > fetched TomTom route > bundled sample.
     route_path: Path | None = None
     route_payload: dict | None = None
     if uploaded is not None:
@@ -257,6 +339,9 @@ def main() -> None:
         tmp = Path(tempfile.gettempdir()) / "uploaded_route_cache.json"
         tmp.write_text(json.dumps(route_payload))
         route_path = tmp
+    elif "fetched_route" in st.session_state:
+        route_payload = st.session_state["fetched_route"]["payload"]
+        route_path = Path(st.session_state["fetched_route"]["path"])
     elif use_default_route and DEFAULT_ROUTE.exists():
         route_payload = json.loads(DEFAULT_ROUTE.read_text())
         route_path = DEFAULT_ROUTE
@@ -318,15 +403,26 @@ def main() -> None:
     # --- GPS map -----------------------------------------------------------
     st.subheader("GPS route map")
     if route_payload is not None:
+        # Route summary (present on TomTom-fetched routes).
+        if route_payload.get("source") == "tomtom+opentopography":
+            sc = route_payload.get("segment_counts", {})
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Route length", f"{route_payload['length_m']/1000:.1f} km")
+            m2.metric("Travel time", f"{route_payload['travel_time_s']/60:.0f} min")
+            m3.metric("Traffic delay", f"{route_payload.get('traffic_delay_s',0)/60:.1f} min")
+            m4.metric("Segments (u/s/h)",
+                      f"{sc.get('urban',0)}/{sc.get('suburban',0)}/{sc.get('highway',0)}")
         try:
             from streamlit_folium import st_folium
             st_folium(build_route_map(route_payload), height=420, width=None)
             st.caption("Polyline colour = recommended mode per segment "
-                       "(urban->EV, suburban->NORMAL, highway->PWR).")
+                       "(urban→EV, suburban→NORMAL, highway→PWR). "
+                       "Toggle the live traffic overlay via the layer control.")
         except Exception as exc:  # pragma: no cover - rendering guard
             st.warning(f"Map rendering unavailable: {exc}")
     else:
-        st.info("Upload a GPS route JSON (or tick 'Use bundled sample route') to render the map.")
+        st.info("Fetch a route from TomTom, upload a GPS route JSON, or tick "
+                "'Use bundled sample route' to render the map.")
 
 
 if __name__ == "__main__":

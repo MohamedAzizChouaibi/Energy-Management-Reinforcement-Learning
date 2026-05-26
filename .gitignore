@@ -4,3 +4,12 @@ pfa/
 __pycache__/
 *.py[cod]
 
+# Day 4 secrets
+.env
+
+# Day 4 regenerable API cache (the bundled sample_route_cache.json stays tracked)
+gps/cache/dem_*.asc
+gps/cache/geocode_*.json
+gps/cache/traffic_*.json
+gps/cache/route_*.json
+
