@@ -95,6 +95,15 @@ for `THSEnv`, plus `waypoints` (2 per segment) and route summary for the map.
   no key is set. The route is auto-fit and coloured per segment
   (urban->EV, suburban->NORMAL, highway->PWR).
 - Route summary metrics: length, travel time, traffic delay, segment counts.
+- **Energy, emissions & battery wear** metrics shown on each run:
+  - *CO₂ emission* — `total_fuel_g × 3.09` g CO₂/g (tank-to-wheel), also g/km.
+  - *Total energy consumption* — fuel chemical energy (LHV 12.06 Wh/g) **plus
+    absolute battery throughput** (`Σ|p_batt_kw|·dt`); summed without sign so
+    regen does not cancel consumption.
+  - *Fuel consumption* — litres and L/100 km (density 745 g/L).
+  - *Battery life* — throughput-based wear as equivalent full cycles against the
+    1.31 kWh NiMH pack (201.6 V × 6.5 Ah), scaled over 1500 cycles to −20 %
+    capacity; shown as a negative %.
 
 Run:
 

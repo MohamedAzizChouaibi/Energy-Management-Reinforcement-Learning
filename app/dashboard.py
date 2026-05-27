@@ -5,8 +5,9 @@ Run with:
 
 Features
 --------
-* Sidebar: drive-cycle selector, agent mode (RL PPO / Rule-based / Random),
-  optional GPS route JSON upload.
+* Sidebar: fixed RL PPO agent on the WLTC cycle, a TomTom live-route fetch,
+  and an optional bundled sample route to overlay grade/segments and render
+  the map.
 * "Run Episode" executes one deterministic episode and stores per-step
   telemetry in ``st.session_state``.
 * SOC trajectory chart with colour bands for EV/ECO/NORMAL/PWR selections.
@@ -22,7 +23,6 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -42,6 +42,14 @@ MODES = ("EV", "ECO", "NORMAL", "PWR")
 ACTION_MAP = {"EV": 0, "ECO": 1, "NORMAL": 2, "PWR": 3}
 MODE_COLORS = {"EV": "#4e79a7", "ECO": "#f28e2b", "NORMAL": "#59a14f", "PWR": "#e15759"}
 SEGMENT_RECOMMENDED = {0: "EV", 1: "NORMAL", 2: "PWR"}  # urban / suburban / highway
+
+# Energy & emissions constants (gasoline + NiMH pack from modeling.py).
+GASOLINE_DENSITY_G_PER_L = 745.0       # g/L
+GASOLINE_LHV_WH_PER_G = 12.06          # 43.4 MJ/kg lower heating value -> Wh/g
+CO2_G_PER_G_FUEL = 3.09                # tank-to-wheel gasoline (≈2.31 kg/L)
+BATT_NOMINAL_KWH = 201.6 * 6.5 / 1000.0  # 201.6 V x 6.5 Ah ≈ 1.31 kWh
+BATT_CYCLE_LIFE = 1500.0               # full equivalent cycles to end-of-life
+BATT_EOL_CAPACITY_LOSS_PCT = 20.0      # capacity loss defining end-of-life
 
 MODEL_PATH = PROJECT_ROOT / "models" / "best_model.zip"
 SIL_KPIS = PROJECT_ROOT / "eval" / "sil_kpis.csv"
@@ -137,9 +145,16 @@ def run_episode(cycle: str, agent_mode: str, route_cache: Path | None, model) ->
                 "speed_kmh": speed_kmh,
                 "segment": _segment_type(speed_kmh),
                 "action": action,
-                "mode": str(info["drive_mode"]),
+                # The mode the agent *selected* (EV/ECO/NORMAL/PWR). NOT
+                # info["drive_mode"], which is the EMS internal sub-state
+                # (EV/HYBRID/REGEN/FULL) and reads "EV" whenever the engine is
+                # off — that made every run look like "always EV".
+                "mode": MODES[action],
+                "ems_submode": str(info["drive_mode"]),
                 "soc_pct": float(info["soc_pct"]),
                 "fuel_rate_gs": float(info["fuel_rate_gs"]),
+                "p_batt_kw": float(info.get("p_batt_kw", 0.0)),
+                "i_batt_a": float(info.get("i_batt_a", 0.0)),
                 "reward": float(reward),
                 "dt": float(env.dt),
             }
@@ -147,6 +162,47 @@ def run_episode(cycle: str, agent_mode: str, route_cache: Path | None, model) ->
     df = pd.DataFrame(rows)
     df["fuel_cumulative_g"] = (df["fuel_rate_gs"] * df["dt"]).cumsum()
     return df
+
+
+def energy_metrics(df: pd.DataFrame) -> dict:
+    """Aggregate fuel, CO2, total energy, and battery wear for one episode.
+
+    Total energy sums fuel chemical energy and *absolute* battery throughput
+    (no sign), so regenerative charging does not cancel out consumption.
+    Battery wear is throughput-based: equivalent full cycles against the pack's
+    nominal energy, scaled to the end-of-life capacity-loss budget.
+    """
+    total_fuel_g = float((df["fuel_rate_gs"] * df["dt"]).sum())
+    distance_km = float((df["speed_kmh"] / 3.6 * df["dt"]).sum()) / 1000.0
+
+    fuel_l = total_fuel_g / GASOLINE_DENSITY_G_PER_L
+    fuel_per_100km = (fuel_l / distance_km * 100.0) if distance_km > 0 else float("nan")
+
+    co2_g = total_fuel_g * CO2_G_PER_G_FUEL
+    co2_per_km = (co2_g / distance_km) if distance_km > 0 else float("nan")
+
+    fuel_energy_kwh = total_fuel_g * GASOLINE_LHV_WH_PER_G / 1000.0
+    batt_throughput_kwh = float((df["p_batt_kw"].abs() * df["dt"]).sum()) / 3600.0
+    total_energy_kwh = fuel_energy_kwh + batt_throughput_kwh
+
+    efc = batt_throughput_kwh / (2.0 * BATT_NOMINAL_KWH)   # equivalent full cycles
+    batt_life_loss_pct = efc * BATT_EOL_CAPACITY_LOSS_PCT / BATT_CYCLE_LIFE
+    ah_throughput = float((df["i_batt_a"].abs() * df["dt"]).sum()) / 3600.0
+
+    return {
+        "distance_km": distance_km,
+        "total_fuel_g": total_fuel_g,
+        "fuel_l": fuel_l,
+        "fuel_per_100km": fuel_per_100km,
+        "co2_g": co2_g,
+        "co2_per_km": co2_per_km,
+        "fuel_energy_kwh": fuel_energy_kwh,
+        "batt_throughput_kwh": batt_throughput_kwh,
+        "total_energy_kwh": total_energy_kwh,
+        "efc": efc,
+        "batt_life_loss_pct": batt_life_loss_pct,
+        "ah_throughput": ah_throughput,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -292,9 +348,13 @@ def main() -> None:
     sil = load_sil_kpis()
 
     # --- sidebar -----------------------------------------------------------
+    # Fixed configuration: the trained RL PPO agent on the WLTC cycle. The
+    # drive-cycle, agent-mode, GPS-upload and TomTom-fetch controls were removed
+    # so the dashboard always evaluates the RL model.
+    cycle = "WLTC"
+    agent_mode = "RL PPO"
     st.sidebar.header("Configuration")
-    cycle = st.sidebar.selectbox("Drive cycle", CYCLES)
-    agent_mode = st.sidebar.radio("Agent mode", ("RL PPO", "Rule-based", "Random"))
+    st.sidebar.markdown(f"**Agent:** RL PPO  \n**Drive cycle:** {cycle}")
 
     # --- Day 4: live route from TomTom -------------------------------------
     st.sidebar.subheader("Route (TomTom)")
@@ -307,10 +367,9 @@ def main() -> None:
     segment_m = st.sidebar.slider("Segment length (m)", 100, 1000, 200, step=50)
     fetch = st.sidebar.button("Fetch route (TomTom)", disabled=not has_key)
 
-    uploaded = st.sidebar.file_uploader("…or upload GPS route JSON", type=["json"])
     use_default_route = st.sidebar.checkbox(
         "Use bundled sample route", value=False,
-        help=f"Loads {DEFAULT_ROUTE.name} if no route fetched/uploaded.")
+        help=f"Loads {DEFAULT_ROUTE.name} if no route fetched.")
     run = st.sidebar.button("Run Episode", type="primary")
 
     # Fetch on demand; persist across reruns in session_state.
@@ -327,19 +386,14 @@ def main() -> None:
         except Exception as exc:
             st.sidebar.error(f"Route fetch failed: {exc}")
 
-    if model is None and agent_mode == "RL PPO":
-        st.sidebar.error(f"Model not found at {MODEL_PATH}. Choose Rule-based or Random.")
+    if model is None:
+        st.sidebar.error(f"Model not found at {MODEL_PATH}. Train/export the RL model first.")
 
     # --- resolve route -----------------------------------------------------
-    # Priority: uploaded JSON > fetched TomTom route > bundled sample.
+    # Priority: fetched TomTom route > bundled sample.
     route_path: Path | None = None
     route_payload: dict | None = None
-    if uploaded is not None:
-        route_payload = json.load(uploaded)
-        tmp = Path(tempfile.gettempdir()) / "uploaded_route_cache.json"
-        tmp.write_text(json.dumps(route_payload))
-        route_path = tmp
-    elif "fetched_route" in st.session_state:
+    if "fetched_route" in st.session_state:
         route_payload = st.session_state["fetched_route"]["payload"]
         route_path = Path(st.session_state["fetched_route"]["path"])
     elif use_default_route and DEFAULT_ROUTE.exists():
@@ -384,6 +438,28 @@ def main() -> None:
     c2.metric("Fuel savings vs NORMAL", f"{savings:+.1f}%" if savings == savings else "n/a")
     c3.metric("SOC RMSE (from 60%)", f"{soc_rmse:.2f}")
     c4.metric("Episode duration (s)", f"{duration_s:.1f}")
+
+    # Energy, emissions & battery wear (computed from per-step telemetry).
+    em = energy_metrics(df)
+    st.subheader("Energy, emissions & battery wear")
+    e1, e2, e3, e4 = st.columns(4)
+    e1.metric("CO₂ emission", f"{em['co2_g'] / 1000.0:.3f} kg",
+              f"{em['co2_per_km']:.0f} g/km" if em["co2_per_km"] == em["co2_per_km"] else None,
+              delta_color="off")
+    e2.metric("Total energy consumption", f"{em['total_energy_kwh']:.2f} kWh",
+              f"fuel {em['fuel_energy_kwh']:.2f} + batt {em['batt_throughput_kwh']:.2f} (abs)",
+              delta_color="off")
+    e3.metric("Fuel consumption", f"{em['fuel_l']:.3f} L",
+              f"{em['fuel_per_100km']:.1f} L/100km" if em["fuel_per_100km"] == em["fuel_per_100km"] else None,
+              delta_color="off")
+    e4.metric("Battery life", f"−{em['batt_life_loss_pct']:.4f} %",
+              f"−{em['efc']:.3f} equiv. full cycles", delta_color="inverse")
+    st.caption(
+        f"Over {em['distance_km']:.1f} km. CO₂ at {CO2_G_PER_G_FUEL} g/g fuel; "
+        f"total energy = fuel LHV ({GASOLINE_LHV_WH_PER_G} Wh/g) + |battery| throughput "
+        f"({em['ah_throughput']:.2f} Ah); battery wear = equivalent full cycles vs a "
+        f"{BATT_NOMINAL_KWH:.2f} kWh pack over {BATT_CYCLE_LIFE:.0f} cycles to "
+        f"−{BATT_EOL_CAPACITY_LOSS_PCT:.0f}% capacity.")
 
     left, right = st.columns([3, 2])
     with left:
