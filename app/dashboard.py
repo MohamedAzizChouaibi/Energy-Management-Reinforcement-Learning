@@ -8,15 +8,16 @@ Features
 * Sidebar: fixed RL PPO agent on the WLTC cycle, a TomTom live-route fetch,
   and an optional bundled sample route to overlay grade/segments and render
   the map.
-* "Run Episode" executes one deterministic episode and stores per-step
-  telemetry in ``st.session_state``.
-* SOC trajectory chart with colour bands for EV/ECO/NORMAL/PWR selections.
-* Cumulative-fuel bar chart: EV/ECO/NORMAL/PWR + Rule-Based + RL PPO + RL+GPS
-  (from eval/sil_kpis.csv) plus the current run.
-* Mode-distribution donut (4 slices, % labels).
+* "Run Episode" runs the RL agent AND every baseline (Rule-based + the four
+  fixed modes EV/ECO/NORMAL/PWR) on the same cycle/route, in one batch.
+* Comparison table: fuel, fuel/100km, savings vs NORMAL, CO₂/km, total energy,
+  SOC RMSE, final/min SOC, battery wear, EV share and episode return per
+  strategy — best value per column highlighted.
+* Responsive (auto-resizing, interactive) Plotly charts: per-KPI grouped bars
+  across strategies, overlaid SOC trajectories, overlaid cumulative-fuel curves.
+* RL detail: SOC trajectory shaded by the *selected* mode + mode-distribution
+  donut.
 * Folium GPS map panel: route polyline coloured by recommended mode per segment.
-* Summary metrics: total fuel (g), fuel savings vs NORMAL (%), SOC RMSE,
-  episode duration.
 """
 
 from __future__ import annotations
@@ -25,9 +26,9 @@ import json
 import sys
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +43,21 @@ MODES = ("EV", "ECO", "NORMAL", "PWR")
 ACTION_MAP = {"EV": 0, "ECO": 1, "NORMAL": 2, "PWR": 3}
 MODE_COLORS = {"EV": "#4e79a7", "ECO": "#f28e2b", "NORMAL": "#59a14f", "PWR": "#e15759"}
 SEGMENT_RECOMMENDED = {0: "EV", 1: "NORMAL", 2: "PWR"}  # urban / suburban / highway
+
+# Strategies compared head-to-head against the RL agent on the same cycle/route.
+# The four fixed modes hold one selector mode for the whole episode; "Rule-based"
+# is the Day-2C heuristic; "RL PPO" is the trained agent.
+COMPARE_STRATEGIES = ("RL PPO", "Rule-based", "EV", "ECO", "NORMAL", "PWR")
+STRATEGY_COLORS = {
+    "RL PPO": "#111111", "Rule-based": "#9c755f",
+    "EV": "#4e79a7", "ECO": "#f28e2b", "NORMAL": "#59a14f", "PWR": "#e15759",
+}
+PLOTLY_LAYOUT = dict(
+    margin=dict(l=50, r=20, t=50, b=40),
+    template="plotly_white",
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    autosize=True,
+)
 
 # Energy & emissions constants (gasoline + NiMH pack from modeling.py).
 GASOLINE_DENSITY_G_PER_L = 745.0       # g/L
@@ -124,6 +140,7 @@ def run_episode(cycle: str, agent_mode: str, route_cache: Path | None, model) ->
     env = THSEnv(cycle=cycle, route_cache=route_cache)
     obs, _ = env.reset(seed=0)
     rng = np.random.default_rng(0)
+    fixed_action = ACTION_MAP.get(agent_mode)  # set only for EV/ECO/NORMAL/PWR
     rows: list[dict] = []
     done = False
     info: dict = {}
@@ -134,6 +151,8 @@ def run_episode(cycle: str, agent_mode: str, route_cache: Path | None, model) ->
         elif agent_mode == "Rule-based":
             soc = float(env.ems.state.soc) if env.ems is not None else 0.60
             action = rule_action(float(env.speed), soc)
+        elif fixed_action is not None:  # held fixed-mode baseline
+            action = fixed_action
         else:  # Random
             action = int(rng.integers(0, len(MODES)))
         obs, reward, terminated, truncated, info = env.step(action)
@@ -205,70 +224,156 @@ def energy_metrics(df: pd.DataFrame) -> dict:
     }
 
 
+def episode_metrics(df: pd.DataFrame) -> dict:
+    """Full metric row for one episode: energy/emissions + SOC + control mix."""
+    em = energy_metrics(df)
+    soc = df["soc_pct"].to_numpy()
+    em.update(
+        {
+            "soc_rmse": float(np.sqrt(np.mean((soc - 60.0) ** 2))),
+            "soc_final": float(soc[-1]),
+            "soc_min": float(soc.min()),
+            "episode_return": float(df["reward"].sum()),
+            "ev_fraction": float((df["action"] == ACTION_MAP["EV"]).mean()),
+            "steps": int(len(df)),
+            "duration_s": float(df["time_s"].iloc[-1]),
+        }
+    )
+    return em
+
+
+def build_comparison(cycle: str, route_cache: Path | None, model) -> dict[str, pd.DataFrame]:
+    """Run every strategy on the same cycle/route and return their telemetry.
+
+    The RL agent is skipped (not run) when no trained model is loaded.
+    """
+    runs: dict[str, pd.DataFrame] = {}
+    for strategy in COMPARE_STRATEGIES:
+        if strategy == "RL PPO" and model is None:
+            continue
+        runs[strategy] = run_episode(cycle, strategy, route_cache, model)
+    return runs
+
+
+def comparison_table(runs: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """One row per strategy with all comparable KPIs; baseline = fixed NORMAL."""
+    metrics = {label: episode_metrics(df) for label, df in runs.items()}
+    normal_fuel = metrics.get("NORMAL", {}).get("total_fuel_g", float("nan"))
+
+    rows = []
+    for label, m in metrics.items():
+        fuel = m["total_fuel_g"]
+        savings = (normal_fuel - fuel) / normal_fuel * 100.0 if normal_fuel == normal_fuel and normal_fuel > 0 else float("nan")
+        rows.append(
+            {
+                "Strategy": label,
+                "Fuel (g)": fuel,
+                "Fuel (L/100km)": m["fuel_per_100km"],
+                "vs NORMAL (%)": savings,
+                "CO₂ (g/km)": m["co2_per_km"],
+                "Energy (kWh)": m["total_energy_kwh"],
+                "SOC RMSE": m["soc_rmse"],
+                "Final SOC (%)": m["soc_final"],
+                "Min SOC (%)": m["soc_min"],
+                "Batt wear (%)": m["batt_life_loss_pct"],
+                "EV share (%)": m["ev_fraction"] * 100.0,
+                "Return": m["episode_return"],
+            }
+        )
+    table = pd.DataFrame(rows).set_index("Strategy")
+    # Keep a stable, meaningful row order (RL first, then heuristic, then modes).
+    order = [s for s in COMPARE_STRATEGIES if s in table.index]
+    return table.loc[order]
+
+
 # ---------------------------------------------------------------------------
 # Charts
 # ---------------------------------------------------------------------------
 
 def soc_chart(df: pd.DataFrame):
-    fig, ax = plt.subplots(figsize=(10, 4))
-    # colour bands for the selected mode at each step
+    """SOC trajectory for the RL run, shaded by the selected drive mode."""
+    fig = go.Figure()
     modes = df["mode"].to_numpy()
     times = df["time_s"].to_numpy()
     start = 0
+    seen: set[str] = set()
     for i in range(1, len(modes) + 1):
         if i == len(modes) or modes[i] != modes[start]:
             m = modes[start]
-            ax.axvspan(times[start], times[min(i, len(times) - 1)],
-                       color=MODE_COLORS.get(m, "#cccccc"), alpha=0.18)
+            fig.add_vrect(
+                x0=times[start], x1=times[min(i, len(times) - 1)],
+                fillcolor=MODE_COLORS.get(m, "#cccccc"), opacity=0.18,
+                line_width=0, layer="below",
+            )
+            seen.add(m)
             start = i
-    ax.plot(df["time_s"], df["soc_pct"], color="black", lw=1.4, label="SOC")
-    ax.axhline(60.0, color="gray", ls=":", lw=0.8)
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel("SOC (%)")
-    ax.set_title("SOC trajectory (background = selected drive mode)")
-    handles = [plt.Rectangle((0, 0), 1, 1, color=MODE_COLORS[m], alpha=0.4) for m in MODES]
-    ax.legend(handles, MODES, ncol=4, fontsize=8, loc="upper right")
-    fig.tight_layout()
-    return fig
-
-
-def fuel_bar_chart(cycle: str, sil: pd.DataFrame | None, current_fuel: float, current_label: str):
-    fig, ax = plt.subplots(figsize=(10, 4))
-    order = ["EV", "ECO", "NORMAL", "PWR", "Rule-Based", "RL PPO", "RL+GPS"]
-    colors = {"EV": "#4e79a7", "ECO": "#f28e2b", "NORMAL": "#59a14f", "PWR": "#e15759",
-              "Rule-Based": "#9c755f", "RL PPO": "#111111", "RL+GPS": "#b07aa1"}
-    labels, vals, bar_colors = [], [], []
-    if sil is not None:
-        for label in order:
-            row = sil[(sil["cycle"] == cycle) & (sil["label"] == label)]
-            if len(row):
-                labels.append(label)
-                vals.append(float(row["total_fuel_g"].iloc[0]))
-                bar_colors.append(colors[label])
-    labels.append(f"This run\n({current_label})")
-    vals.append(current_fuel)
-    bar_colors.append("#1f77b4")
-    ax.bar(labels, vals, color=bar_colors)
-    ax.set_ylabel("Total fuel (g)")
-    ax.set_title(f"Fuel comparison - {cycle}")
-    ax.tick_params(axis="x", rotation=30)
-    fig.tight_layout()
+    fig.add_trace(go.Scatter(x=df["time_s"], y=df["soc_pct"], mode="lines",
+                             name="SOC", line=dict(color="black", width=1.6)))
+    fig.add_hline(y=60.0, line=dict(color="gray", dash="dot", width=1))
+    # Legend proxies so the mode-colour bands are explained.
+    for m in MODES:
+        if m in seen:
+            fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers",
+                                     marker=dict(size=10, color=MODE_COLORS[m]), name=m))
+    fig.update_layout(title="SOC trajectory (background = selected drive mode)",
+                      xaxis_title="Time (s)", yaxis_title="SOC (%)", **PLOTLY_LAYOUT)
     return fig
 
 
 def mode_donut(df: pd.DataFrame):
+    """Distribution of the modes the agent actually selected."""
     counts = df["mode"].value_counts().reindex(MODES, fill_value=0)
     nonzero = counts[counts > 0]
-    fig, ax = plt.subplots(figsize=(5, 5))
-    ax.pie(
-        nonzero.values,
-        labels=nonzero.index,
-        colors=[MODE_COLORS[m] for m in nonzero.index],
-        autopct="%1.1f%%",
-        startangle=90,
-        wedgeprops=dict(width=0.42),
-    )
-    ax.set_title("Mode distribution")
+    fig = go.Figure(go.Pie(
+        labels=list(nonzero.index), values=list(nonzero.values), hole=0.55,
+        marker=dict(colors=[MODE_COLORS[m] for m in nonzero.index]),
+        textinfo="label+percent", sort=False,
+    ))
+    fig.update_layout(title="Mode distribution (selected)",
+                      margin=dict(l=10, r=10, t=50, b=10), template="plotly_white")
+    return fig
+
+
+def comparison_bars(table: pd.DataFrame, column: str, title: str, ylabel: str):
+    """Single grouped bar chart of one KPI across strategies (RL highlighted)."""
+    strategies = list(table.index)
+    fig = go.Figure(go.Bar(
+        x=strategies, y=table[column].to_numpy(),
+        marker_color=[STRATEGY_COLORS.get(s, "#1f77b4") for s in strategies],
+        text=[f"{v:.1f}" if v == v else "" for v in table[column]], textposition="outside",
+    ))
+    fig.update_layout(title=title, yaxis_title=ylabel, showlegend=False,
+                      margin=dict(l=50, r=20, t=50, b=40), template="plotly_white",
+                      autosize=True)
+    return fig
+
+
+def soc_comparison_chart(runs: dict[str, pd.DataFrame]):
+    """All strategies' SOC trajectories overlaid for a like-for-like view."""
+    fig = go.Figure()
+    for label, df in runs.items():
+        fig.add_trace(go.Scatter(
+            x=df["time_s"], y=df["soc_pct"], mode="lines", name=label,
+            line=dict(color=STRATEGY_COLORS.get(label, None),
+                      width=2.4 if label == "RL PPO" else 1.3),
+        ))
+    fig.add_hline(y=60.0, line=dict(color="gray", dash="dot", width=1))
+    fig.update_layout(title="SOC trajectory - all strategies",
+                      xaxis_title="Time (s)", yaxis_title="SOC (%)", **PLOTLY_LAYOUT)
+    return fig
+
+
+def cumfuel_comparison_chart(runs: dict[str, pd.DataFrame]):
+    """Cumulative fuel burn over the cycle for every strategy."""
+    fig = go.Figure()
+    for label, df in runs.items():
+        fig.add_trace(go.Scatter(
+            x=df["time_s"], y=df["fuel_cumulative_g"], mode="lines", name=label,
+            line=dict(color=STRATEGY_COLORS.get(label, None),
+                      width=2.4 if label == "RL PPO" else 1.3),
+        ))
+    fig.update_layout(title="Cumulative fuel - all strategies",
+                      xaxis_title="Time (s)", yaxis_title="Fuel (g)", **PLOTLY_LAYOUT)
     return fig
 
 
@@ -405,9 +510,10 @@ def main() -> None:
         if agent_mode == "RL PPO" and model is None:
             st.error("Cannot run RL PPO without a trained model.")
         else:
-            with st.spinner(f"Running {agent_mode} on {cycle} ..."):
-                df = run_episode(cycle, agent_mode, route_path, model)
-            st.session_state["telemetry"] = df
+            with st.spinner(f"Running RL agent + 5 baselines on {cycle} ..."):
+                runs = build_comparison(cycle, route_path, model)
+            st.session_state["runs"] = runs
+            st.session_state["telemetry"] = runs.get("RL PPO", next(iter(runs.values())))
             st.session_state["meta"] = {
                 "cycle": cycle, "agent_mode": agent_mode,
                 "has_route": route_path is not None,
@@ -418,6 +524,7 @@ def main() -> None:
         st.info("Configure the run in the sidebar and click **Run Episode**.")
         return
 
+    runs: dict[str, pd.DataFrame] = st.session_state.get("runs", {})
     df = st.session_state["telemetry"]
     meta = st.session_state["meta"]
     dt = float(df["dt"].iloc[0])
@@ -426,8 +533,13 @@ def main() -> None:
     soc_rmse = float(np.sqrt(np.mean((soc - 60.0) ** 2)))
     duration_s = float(df["time_s"].iloc[-1])
 
+    # Baseline is the fixed-NORMAL run from this same comparison batch (so the
+    # cycle/route always matches); fall back to the SIL CSV if NORMAL is absent.
     normal_fuel = np.nan
-    if sil is not None:
+    if "NORMAL" in runs:
+        ndf = runs["NORMAL"]
+        normal_fuel = float((ndf["fuel_rate_gs"] * ndf["dt"]).sum())
+    elif sil is not None:
         row = sil[(sil["cycle"] == meta["cycle"]) & (sil["label"] == "NORMAL")]
         if len(row):
             normal_fuel = float(row["total_fuel_g"].iloc[0])
@@ -461,13 +573,57 @@ def main() -> None:
         f"{BATT_NOMINAL_KWH:.2f} kWh pack over {BATT_CYCLE_LIFE:.0f} cycles to "
         f"−{BATT_EOL_CAPACITY_LOSS_PCT:.0f}% capacity.")
 
+    # --- RL agent vs all modes --------------------------------------------
+    if runs:
+        st.subheader(f"RL agent vs baselines — {meta['cycle']}")
+        table = comparison_table(runs)
+
+        fmt = {
+            "Fuel (g)": "{:.1f}", "Fuel (L/100km)": "{:.2f}", "vs NORMAL (%)": "{:+.1f}",
+            "CO₂ (g/km)": "{:.0f}", "Energy (kWh)": "{:.2f}", "SOC RMSE": "{:.2f}",
+            "Final SOC (%)": "{:.1f}", "Min SOC (%)": "{:.1f}", "Batt wear (%)": "{:.4f}",
+            "EV share (%)": "{:.0f}", "Return": "{:.0f}",
+        }
+        # Highlight the best (min) for cost-like columns, and the RL row.
+        lower_better = ["Fuel (g)", "Fuel (L/100km)", "CO₂ (g/km)", "Energy (kWh)",
+                        "SOC RMSE", "Batt wear (%)"]
+        styler = (table.style.format(fmt)
+                  .highlight_min(subset=lower_better, color="#d6f5d6", axis=0)
+                  .highlight_max(subset=["vs NORMAL (%)", "Return"], color="#d6f5d6", axis=0))
+        st.dataframe(styler, use_container_width=True)
+        st.caption("Green = best across strategies. All runs share the same drive "
+                   "cycle/route. Baseline for savings is fixed-NORMAL.")
+
+        b1, b2 = st.columns(2)
+        with b1:
+            st.plotly_chart(comparison_bars(table, "Fuel (g)", "Total fuel", "g"),
+                            use_container_width=True)
+            st.plotly_chart(comparison_bars(table, "CO₂ (g/km)", "CO₂ intensity", "g/km"),
+                            use_container_width=True)
+            st.plotly_chart(comparison_bars(table, "SOC RMSE", "SOC tracking error", "RMSE"),
+                            use_container_width=True)
+        with b2:
+            st.plotly_chart(comparison_bars(table, "Energy (kWh)", "Total energy", "kWh"),
+                            use_container_width=True)
+            st.plotly_chart(comparison_bars(table, "Batt wear (%)", "Battery wear", "% life"),
+                            use_container_width=True)
+            st.plotly_chart(comparison_bars(table, "vs NORMAL (%)", "Fuel savings vs NORMAL", "%"),
+                            use_container_width=True)
+
+        t1, t2 = st.columns(2)
+        with t1:
+            st.plotly_chart(soc_comparison_chart(runs), use_container_width=True)
+        with t2:
+            st.plotly_chart(cumfuel_comparison_chart(runs), use_container_width=True)
+
+    # --- RL agent detail ---------------------------------------------------
+    st.subheader("RL agent — episode detail")
     left, right = st.columns([3, 2])
     with left:
-        st.pyplot(soc_chart(df))
-        st.pyplot(fuel_bar_chart(meta["cycle"], sil, total_fuel, meta["agent_mode"]))
+        st.plotly_chart(soc_chart(df), use_container_width=True)
     with right:
-        st.pyplot(mode_donut(df))
-        st.subheader("Summary metrics")
+        st.plotly_chart(mode_donut(df), use_container_width=True)
+        st.markdown("**Summary**")
         st.table(pd.DataFrame({
             "Metric": ["Total fuel (g)", "Fuel savings vs NORMAL (%)", "SOC RMSE (%)",
                        "Final SOC (%)", "Episode duration (s)", "Steps"],
