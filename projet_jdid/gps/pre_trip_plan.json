@@ -1,0 +1,46 @@
+{
+  "gps_anticipation_events": 2,
+  "gps_anticipation_rate_pct": 100.0,
+  "model_path": "models/ths_agent_gps.zip",
+  "route_cache": "gps/cache/sample_phase0_route.json",
+  "schema_version": "ths-ii-pre-trip-plan-v1",
+  "segments": [
+    {
+      "end_km": 0.31,
+      "expected_CO2_g": 13.645493640446059,
+      "grade_rad": 0.004838671,
+      "length_m": 310.0,
+      "recommended_action": 2,
+      "recommended_mode": "NORMAL",
+      "segment_id": 0,
+      "speed_limit_kmh": 30.0,
+      "start_km": 0.0,
+      "traffic_density": 0.7
+    },
+    {
+      "end_km": 0.778,
+      "expected_CO2_g": 46.699794013044894,
+      "grade_rad": 0.018160786,
+      "length_m": 468.0,
+      "recommended_action": 2,
+      "recommended_mode": "NORMAL",
+      "segment_id": 1,
+      "speed_limit_kmh": 50.0,
+      "start_km": 0.31,
+      "traffic_density": 0.3
+    },
+    {
+      "end_km": 1.333,
+      "expected_CO2_g": 16.610670853186395,
+      "grade_rad": -0.01261205,
+      "length_m": 555.0,
+      "recommended_action": 2,
+      "recommended_mode": "NORMAL",
+      "segment_id": 2,
+      "speed_limit_kmh": 90.0,
+      "start_km": 0.778,
+      "traffic_density": 0.1
+    }
+  ],
+  "total_expected_CO2_g": 76.95595850667735
+}

@@ -1,0 +1,1930 @@
+{
+  "destination": "Place de la Nation, Paris, France",
+  "origin": "Gare de Lyon, Paris, France",
+  "provider": "tomtom",
+  "schema_version": "ths-ii-tomtom-cache-v1",
+  "segments": [
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84569,
+        "lon": 2.37266
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 14.803242000001019,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 14.803242000001019,
+      "polyline": [
+        {
+          "lat": 48.84567,
+          "lon": 2.37246
+        },
+        {
+          "lat": 48.84569,
+          "lon": 2.37266
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 0,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84567,
+        "lon": 2.37246
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 4.464206387892684
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84571,
+        "lon": 2.37275
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 6.951202447552462,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 6.951202447552462,
+      "polyline": [
+        {
+          "lat": 48.84569,
+          "lon": 2.37266
+        },
+        {
+          "lat": 48.84571,
+          "lon": 2.37275
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 1,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84569,
+        "lon": 2.37266
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 2.0962706932641395
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84569,
+        "lon": 2.37283
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 6.262278910648307,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 6.262278910648307,
+      "polyline": [
+        {
+          "lat": 48.84571,
+          "lon": 2.37275
+        },
+        {
+          "lat": 48.84569,
+          "lon": 2.37283
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 2,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84571,
+        "lon": 2.37275
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 1.888512362067707
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.8457,
+        "lon": 2.37292
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 6.679066597675852,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 6.679066597675852,
+      "polyline": [
+        {
+          "lat": 48.84569,
+          "lon": 2.37283
+        },
+        {
+          "lat": 48.8457,
+          "lon": 2.37292
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 3,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84569,
+        "lon": 2.37283
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 2.0142028192542645
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84571,
+        "lon": 2.37305
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 9.57766782828963,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 9.57766782828963,
+      "polyline": [
+        {
+          "lat": 48.8457,
+          "lon": 2.37292
+        },
+        {
+          "lat": 48.84571,
+          "lon": 2.37305
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 4,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.8457,
+        "lon": 2.37292
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 2.8883325625671645
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84577,
+        "lon": 2.37352
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 35.03390269373848,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 35.03390269373848,
+      "polyline": [
+        {
+          "lat": 48.84571,
+          "lon": 2.37305
+        },
+        {
+          "lat": 48.84577,
+          "lon": 2.37352
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 5,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84571,
+        "lon": 2.37305
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 10.56515675405342
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84583,
+        "lon": 2.37392
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 30.021132760344337,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 30.021132760344337,
+      "polyline": [
+        {
+          "lat": 48.84577,
+          "lon": 2.37352
+        },
+        {
+          "lat": 48.84583,
+          "lon": 2.37392
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 6,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84577,
+        "lon": 2.37352
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 9.053458197906531
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84584,
+        "lon": 2.37399
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 5.241619430445767,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 5.241619430445767,
+      "polyline": [
+        {
+          "lat": 48.84583,
+          "lon": 2.37392
+        },
+        {
+          "lat": 48.84584,
+          "lon": 2.37399
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 7,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84583,
+        "lon": 2.37392
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 1.5807125860873446
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84586,
+        "lon": 2.3741
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 8.350918219669637,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 8.350918219669637,
+      "polyline": [
+        {
+          "lat": 48.84584,
+          "lon": 2.37399
+        },
+        {
+          "lat": 48.84586,
+          "lon": 2.3741
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 8,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84584,
+        "lon": 2.37399
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 2.518382288218758
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84588,
+        "lon": 2.37419
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 6.951181265585938,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 6.951181265585938,
+      "polyline": [
+        {
+          "lat": 48.84586,
+          "lon": 2.3741
+        },
+        {
+          "lat": 48.84588,
+          "lon": 2.37419
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 9,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84586,
+        "lon": 2.3741
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 2.096264305428943
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84592,
+        "lon": 2.37439
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 15.296119306087144,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 15.296119306087144,
+      "polyline": [
+        {
+          "lat": 48.84588,
+          "lon": 2.37419
+        },
+        {
+          "lat": 48.84592,
+          "lon": 2.37439
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 10,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84588,
+        "lon": 2.37419
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 4.612843153965742
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84595,
+        "lon": 2.37452
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 10.080790601006221,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 10.080790601006221,
+      "polyline": [
+        {
+          "lat": 48.84592,
+          "lon": 2.37439
+        },
+        {
+          "lat": 48.84595,
+          "lon": 2.37452
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 11,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84592,
+        "lon": 2.37439
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 3.0400590489581543
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84598,
+        "lon": 2.37479
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 20.03709475445393,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 20.03709475445393,
+      "polyline": [
+        {
+          "lat": 48.84595,
+          "lon": 2.37452
+        },
+        {
+          "lat": 48.84598,
+          "lon": 2.37479
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 12,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84595,
+        "lon": 2.37452
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 6.042576781331959
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84609,
+        "lon": 2.37568
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 66.26500164149677,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 66.26500164149677,
+      "polyline": [
+        {
+          "lat": 48.84598,
+          "lon": 2.37479
+        },
+        {
+          "lat": 48.84609,
+          "lon": 2.37568
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 13,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84598,
+        "lon": 2.37479
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 19.98350385825407
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.8461,
+        "lon": 2.37578
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 7.401561046459773,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 7.401561046459773,
+      "polyline": [
+        {
+          "lat": 48.84609,
+          "lon": 2.37568
+        },
+        {
+          "lat": 48.8461,
+          "lon": 2.37578
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 14,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84609,
+        "lon": 2.37568
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 2.2320851137866358
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84613,
+        "lon": 2.37601
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 17.157784347778605,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 17.157784347778605,
+      "polyline": [
+        {
+          "lat": 48.8461,
+          "lon": 2.37578
+        },
+        {
+          "lat": 48.84613,
+          "lon": 2.37601
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 15,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.8461,
+        "lon": 2.37578
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 5.174264562278526
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84616,
+        "lon": 2.37639
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 28.00607648215093,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 28.00607648215093,
+      "polyline": [
+        {
+          "lat": 48.84613,
+          "lon": 2.37601
+        },
+        {
+          "lat": 48.84616,
+          "lon": 2.37639
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 16,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84613,
+        "lon": 2.37601
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 8.445778670065696
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84629,
+        "lon": 2.37748
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 81.0604975589043,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 81.0604975589043,
+      "polyline": [
+        {
+          "lat": 48.84616,
+          "lon": 2.37639
+        },
+        {
+          "lat": 48.84629,
+          "lon": 2.37748
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 17,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84616,
+        "lon": 2.37639
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 24.445374263839973
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84633,
+        "lon": 2.37781
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 24.554046095874472,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 24.554046095874472,
+      "polyline": [
+        {
+          "lat": 48.84629,
+          "lon": 2.37748
+        },
+        {
+          "lat": 48.84633,
+          "lon": 2.37781
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 18,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84629,
+        "lon": 2.37748
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 7.4047515692715615
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84635,
+        "lon": 2.37805
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 17.70230361631634,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 17.70230361631634,
+      "polyline": [
+        {
+          "lat": 48.84633,
+          "lon": 2.37781
+        },
+        {
+          "lat": 48.84635,
+          "lon": 2.37805
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 19,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84633,
+        "lon": 2.37781
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 5.338474969494501
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84647,
+        "lon": 2.37894
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 66.47875477348663,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 66.47875477348663,
+      "polyline": [
+        {
+          "lat": 48.84635,
+          "lon": 2.37805
+        },
+        {
+          "lat": 48.84647,
+          "lon": 2.37894
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 20,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84635,
+        "lon": 2.37805
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 20.047965284829488
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84651,
+        "lon": 2.37931
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 27.437662286415176,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 27.437662286415176,
+      "polyline": [
+        {
+          "lat": 48.84647,
+          "lon": 2.37894
+        },
+        {
+          "lat": 48.84651,
+          "lon": 2.37931
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 21,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84647,
+        "lon": 2.37894
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 8.274362281441348
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84655,
+        "lon": 2.37964
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 24.553941763435496,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 24.553941763435496,
+      "polyline": [
+        {
+          "lat": 48.84651,
+          "lon": 2.37931
+        },
+        {
+          "lat": 48.84655,
+          "lon": 2.37964
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 22,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84651,
+        "lon": 2.37931
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 7.404720105789404
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84673,
+        "lon": 2.38152
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 139.0170078937101,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 139.0170078937101,
+      "polyline": [
+        {
+          "lat": 48.84655,
+          "lon": 2.37964
+        },
+        {
+          "lat": 48.84673,
+          "lon": 2.38152
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 23,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84655,
+        "lon": 2.37964
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 41.923290497094186
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84674,
+        "lon": 2.38173
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 15.406856621810075,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 15.406856621810075,
+      "polyline": [
+        {
+          "lat": 48.84673,
+          "lon": 2.38152
+        },
+        {
+          "lat": 48.84674,
+          "lon": 2.38173
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 24,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84673,
+        "lon": 2.38152
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 4.646238151644518
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84681,
+        "lon": 2.38227
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 40.273611188283994,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 40.273611188283994,
+      "polyline": [
+        {
+          "lat": 48.84674,
+          "lon": 2.38173
+        },
+        {
+          "lat": 48.84681,
+          "lon": 2.38227
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 25,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84674,
+        "lon": 2.38173
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 12.14529306014394
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84698,
+        "lon": 2.38377
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 111.37749093602974,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 111.37749093602974,
+      "polyline": [
+        {
+          "lat": 48.84681,
+          "lon": 2.38227
+        },
+        {
+          "lat": 48.84698,
+          "lon": 2.38377
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 26,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84681,
+        "lon": 2.38227
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 33.58805500200897
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84705,
+        "lon": 2.38425
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 35.97575827053615,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 35.97575827053615,
+      "polyline": [
+        {
+          "lat": 48.84698,
+          "lon": 2.38377
+        },
+        {
+          "lat": 48.84705,
+          "lon": 2.38425
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 27,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84698,
+        "lon": 2.38377
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 10.849191675755856
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84706,
+        "lon": 2.3843
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 3.8239490850269835,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 3.8239490850269835,
+      "polyline": [
+        {
+          "lat": 48.84705,
+          "lon": 2.38425
+        },
+        {
+          "lat": 48.84706,
+          "lon": 2.3843
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 28,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84705,
+        "lon": 2.38425
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 1.1531864393186755
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84712,
+        "lon": 2.38485
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 40.79502500999661,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 40.79502500999661,
+      "polyline": [
+        {
+          "lat": 48.84706,
+          "lon": 2.3843
+        },
+        {
+          "lat": 48.84712,
+          "lon": 2.38485
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 29,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84706,
+        "lon": 2.3843
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 12.30253556915817
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84714,
+        "lon": 2.38504
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 14.079816410480538,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 14.079816410480538,
+      "polyline": [
+        {
+          "lat": 48.84712,
+          "lon": 2.38485
+        },
+        {
+          "lat": 48.84714,
+          "lon": 2.38504
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 30,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84712,
+        "lon": 2.38485
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 4.246043289707695
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.8472,
+        "lon": 2.38557
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 39.351912768430864,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 39.351912768430864,
+      "polyline": [
+        {
+          "lat": 48.84714,
+          "lon": 2.38504
+        },
+        {
+          "lat": 48.8472,
+          "lon": 2.38557
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 31,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84714,
+        "lon": 2.38504
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 11.867336922318277
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84724,
+        "lon": 2.3859
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 24.553614536762247,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 24.553614536762247,
+      "polyline": [
+        {
+          "lat": 48.8472,
+          "lon": 2.38557
+        },
+        {
+          "lat": 48.84724,
+          "lon": 2.3859
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 32,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.8472,
+        "lon": 2.38557
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 7.404621424202965
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.8473,
+        "lon": 2.38633
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 32.16431371296293,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 32.16431371296293,
+      "polyline": [
+        {
+          "lat": 48.84724,
+          "lon": 2.3859
+        },
+        {
+          "lat": 48.8473,
+          "lon": 2.38633
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 33,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84724,
+        "lon": 2.3859
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 9.699776220613261
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84734,
+        "lon": 2.38676
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 31.77754672915738,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 31.77754672915738,
+      "polyline": [
+        {
+          "lat": 48.8473,
+          "lon": 2.38633
+        },
+        {
+          "lat": 48.84734,
+          "lon": 2.38676
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 34,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.8473,
+        "lon": 2.38633
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 9.58313909208894
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84738,
+        "lon": 2.38718
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 31.053156367512454,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 31.053156367512454,
+      "polyline": [
+        {
+          "lat": 48.84734,
+          "lon": 2.38676
+        },
+        {
+          "lat": 48.84738,
+          "lon": 2.38718
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 35,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84734,
+        "lon": 2.38676
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 9.36468504805028
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84742,
+        "lon": 2.38746
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 20.965851969865955,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 20.965851969865955,
+      "polyline": [
+        {
+          "lat": 48.84738,
+          "lon": 2.38718
+        },
+        {
+          "lat": 48.84742,
+          "lon": 2.38746
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 36,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84738,
+        "lon": 2.38718
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 6.322661636652401
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84755,
+        "lon": 2.38854
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 80.33862264250179,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 80.33862264250179,
+      "polyline": [
+        {
+          "lat": 48.84742,
+          "lon": 2.38746
+        },
+        {
+          "lat": 48.84755,
+          "lon": 2.38854
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 37,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84742,
+        "lon": 2.38746
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 24.227678801382265
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84762,
+        "lon": 2.38903
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 36.69011149706782,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 36.69011149706782,
+      "polyline": [
+        {
+          "lat": 48.84755,
+          "lon": 2.38854
+        },
+        {
+          "lat": 48.84762,
+          "lon": 2.38903
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 38,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84755,
+        "lon": 2.38854
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 11.064618825909465
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84775,
+        "lon": 2.39008
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 78.17993909151355,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 78.17993909151355,
+      "polyline": [
+        {
+          "lat": 48.84762,
+          "lon": 2.38903
+        },
+        {
+          "lat": 48.84775,
+          "lon": 2.39008
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 39,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84762,
+        "lon": 2.38903
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 23.576685667732225
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84781,
+        "lon": 2.39064
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 41.51652969456522,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 41.51652969456522,
+      "polyline": [
+        {
+          "lat": 48.84775,
+          "lon": 2.39008
+        },
+        {
+          "lat": 48.84781,
+          "lon": 2.39064
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 40,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84775,
+        "lon": 2.39008
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 12.520119380984355
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84789,
+        "lon": 2.39154
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 66.45380533887058,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 66.45380533887058,
+      "polyline": [
+        {
+          "lat": 48.84781,
+          "lon": 2.39064
+        },
+        {
+          "lat": 48.84789,
+          "lon": 2.39154
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 41,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84781,
+        "lon": 2.39064
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 20.04044129613922
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84792,
+        "lon": 2.39185
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 22.92758658762811,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 22.92758658762811,
+      "polyline": [
+        {
+          "lat": 48.84789,
+          "lon": 2.39154
+        },
+        {
+          "lat": 48.84792,
+          "lon": 2.39185
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 42,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84789,
+        "lon": 2.39154
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 6.91426097765915
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84795,
+        "lon": 2.39206
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 15.72422853859682,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 15.72422853859682,
+      "polyline": [
+        {
+          "lat": 48.84792,
+          "lon": 2.39185
+        },
+        {
+          "lat": 48.84795,
+          "lon": 2.39206
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 43,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84792,
+        "lon": 2.39185
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 4.7419478440387275
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.848,
+        "lon": 2.39256
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 37.006447224552396,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 37.006447224552396,
+      "polyline": [
+        {
+          "lat": 48.84795,
+          "lon": 2.39206
+        },
+        {
+          "lat": 48.848,
+          "lon": 2.39256
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 44,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84795,
+        "lon": 2.39206
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 11.160016035206944
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84803,
+        "lon": 2.39281
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 18.594863138318537,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 18.594863138318537,
+      "polyline": [
+        {
+          "lat": 48.848,
+          "lon": 2.39256
+        },
+        {
+          "lat": 48.84803,
+          "lon": 2.39281
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 45,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.848,
+        "lon": 2.39256
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 5.607643704268707
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.8482,
+        "lon": 2.39432
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 112.09603447185678,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 112.09603447185678,
+      "polyline": [
+        {
+          "lat": 48.84803,
+          "lon": 2.39281
+        },
+        {
+          "lat": 48.8482,
+          "lon": 2.39432
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 46,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84803,
+        "lon": 2.39281
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 33.80474582166981
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84821,
+        "lon": 2.39459
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 19.787844631349852,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 19.787844631349852,
+      "polyline": [
+        {
+          "lat": 48.8482,
+          "lon": 2.39432
+        },
+        {
+          "lat": 48.84821,
+          "lon": 2.39459
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 47,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.8482,
+        "lon": 2.39432
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 5.967410544655953
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84828,
+        "lon": 2.39502
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 32.41262298423484,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 32.41262298423484,
+      "polyline": [
+        {
+          "lat": 48.84821,
+          "lon": 2.39459
+        },
+        {
+          "lat": 48.84828,
+          "lon": 2.39502
+        }
+      ],
+      "road_class": "unknown",
+      "segment_id": 48,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84821,
+        "lon": 2.39459
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 9.774658725066335
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84827,
+        "lon": 2.39502
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 1.1119492667985353,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 1.1119492667985353,
+      "polyline": [
+        {
+          "lat": 48.84828,
+          "lon": 2.39502
+        },
+        {
+          "lat": 48.84827,
+          "lon": 2.39502
+        }
+      ],
+      "road_class": "TRAFFIC",
+      "segment_id": 49,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84828,
+        "lon": 2.39502
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 1.0
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84814,
+        "lon": 2.39509
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 15.335987985831169,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 15.335987985831169,
+      "polyline": [
+        {
+          "lat": 48.84827,
+          "lon": 2.39502
+        },
+        {
+          "lat": 48.84814,
+          "lon": 2.39509
+        }
+      ],
+      "road_class": "TRAFFIC",
+      "segment_id": 50,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84827,
+        "lon": 2.39502
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 4.624866332049982
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.848,
+        "lon": 2.39521
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 17.872930346098432,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 17.872930346098432,
+      "polyline": [
+        {
+          "lat": 48.84814,
+          "lon": 2.39509
+        },
+        {
+          "lat": 48.848,
+          "lon": 2.39521
+        }
+      ],
+      "road_class": "TRAFFIC",
+      "segment_id": 51,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84814,
+        "lon": 2.39509
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 5.389930788229235
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84794,
+        "lon": 2.39531
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 9.902231421588947,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 9.902231421588947,
+      "polyline": [
+        {
+          "lat": 48.848,
+          "lon": 2.39521
+        },
+        {
+          "lat": 48.84794,
+          "lon": 2.39531
+        }
+      ],
+      "road_class": "TRAFFIC",
+      "segment_id": 52,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.848,
+        "lon": 2.39521
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 2.9862110452998056
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84789,
+        "lon": 2.39541
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 9.189861907003344,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 9.189861907003344,
+      "polyline": [
+        {
+          "lat": 48.84794,
+          "lon": 2.39531
+        },
+        {
+          "lat": 48.84789,
+          "lon": 2.39541
+        }
+      ],
+      "road_class": "TRAFFIC",
+      "segment_id": 53,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84794,
+        "lon": 2.39531
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 2.7713821221792596
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84785,
+        "lon": 2.39551
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 8.563047212286781,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 8.563047212286781,
+      "polyline": [
+        {
+          "lat": 48.84789,
+          "lon": 2.39541
+        },
+        {
+          "lat": 48.84785,
+          "lon": 2.39551
+        }
+      ],
+      "road_class": "TRAFFIC",
+      "segment_id": 54,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84789,
+        "lon": 2.39541
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 2.582353923884691
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84782,
+        "lon": 2.39562
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 8.712913088391032,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 8.712913088391032,
+      "polyline": [
+        {
+          "lat": 48.84785,
+          "lon": 2.39551
+        },
+        {
+          "lat": 48.84782,
+          "lon": 2.39562
+        }
+      ],
+      "road_class": "TRAFFIC",
+      "segment_id": 55,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84785,
+        "lon": 2.39551
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 2.627548902216578
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.84779,
+        "lon": 2.3958
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 13.587025366170407,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 13.587025366170407,
+      "polyline": [
+        {
+          "lat": 48.84782,
+          "lon": 2.39562
+        },
+        {
+          "lat": 48.84779,
+          "lon": 2.3958
+        }
+      ],
+      "road_class": "TRAFFIC",
+      "segment_id": 56,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84782,
+        "lon": 2.39562
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 4.097432537555874
+    },
+    {
+      "elevation_m": [],
+      "end": {
+        "lat": 48.8478,
+        "lon": 2.39604
+      },
+      "frc": null,
+      "gps_dist_to_next_seg": 17.5967138137516,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": 0.0,
+      "jam_factor": 0.0,
+      "length_m": 17.5967138137516,
+      "polyline": [
+        {
+          "lat": 48.84779,
+          "lon": 2.3958
+        },
+        {
+          "lat": 48.8478,
+          "lon": 2.39604
+        }
+      ],
+      "road_class": "TRAFFIC",
+      "segment_id": 57,
+      "segment_type": 1,
+      "speed_limit_kmh": 11.937546468401488,
+      "start": {
+        "lat": 48.84779,
+        "lon": 2.3958
+      },
+      "traffic_density": 0.0,
+      "travel_time_s": 5.306632304819709
+    }
+  ],
+  "speed_profile": {
+    "dt_s": 1.0,
+    "dtype": "float32",
+    "max_speed_ms": 3.3159852027893066,
+    "min_speed_ms": 3.3159852027893066,
+    "n_steps": 511,
+    "source": "tomtom_route_to_cycle"
+  }
+}

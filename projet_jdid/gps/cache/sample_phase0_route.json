@@ -1,0 +1,137 @@
+{
+  "destination": "Sample Destination",
+  "origin": "Sample Origin",
+  "provider": "sample_fixture",
+  "schema_version": "ths-ii-tomtom-cache-v1",
+  "segments": [
+    {
+      "elevation_m": [
+        35.0,
+        36.5
+      ],
+      "end": {
+        "elevation_m": 36.5,
+        "lat": 48.8569,
+        "lon": 2.355
+      },
+      "frc": 6,
+      "gps_dist_to_next_seg": 310.0,
+      "gps_lookahead_grade": 0.0182,
+      "grade_rad": 0.004838671,
+      "jam_factor": 7.0,
+      "length_m": 310.0,
+      "polyline": [
+        {
+          "elevation_m": 35.0,
+          "lat": 48.8566,
+          "lon": 2.3522
+        },
+        {
+          "elevation_m": 36.5,
+          "lat": 48.8569,
+          "lon": 2.355
+        }
+      ],
+      "road_class": "urban",
+      "segment_id": 0,
+      "segment_type": 0,
+      "speed_limit_kmh": 30.0,
+      "start": {
+        "elevation_m": 35.0,
+        "lat": 48.8566,
+        "lon": 2.3522
+      },
+      "traffic_density": 0.7,
+      "travel_time_s": 52.0
+    },
+    {
+      "elevation_m": [
+        36.5,
+        45.0
+      ],
+      "end": {
+        "elevation_m": 45.0,
+        "lat": 48.8595,
+        "lon": 2.362
+      },
+      "frc": 4,
+      "gps_dist_to_next_seg": 468.0,
+      "gps_lookahead_grade": -0.0126,
+      "grade_rad": 0.018160786,
+      "jam_factor": 3.0,
+      "length_m": 468.0,
+      "polyline": [
+        {
+          "elevation_m": 36.5,
+          "lat": 48.8569,
+          "lon": 2.355
+        },
+        {
+          "elevation_m": 45.0,
+          "lat": 48.8595,
+          "lon": 2.362
+        }
+      ],
+      "road_class": "arterial",
+      "segment_id": 1,
+      "segment_type": 1,
+      "speed_limit_kmh": 50.0,
+      "start": {
+        "elevation_m": 36.5,
+        "lat": 48.8569,
+        "lon": 2.355
+      },
+      "traffic_density": 0.3,
+      "travel_time_s": 45.0
+    },
+    {
+      "elevation_m": [
+        45.0,
+        38.0
+      ],
+      "end": {
+        "elevation_m": 38.0,
+        "lat": 48.865,
+        "lon": 2.374
+      },
+      "frc": 1,
+      "gps_dist_to_next_seg": 555.0,
+      "gps_lookahead_grade": 0.0,
+      "grade_rad": -0.01261205,
+      "jam_factor": 1.0,
+      "length_m": 555.0,
+      "polyline": [
+        {
+          "elevation_m": 45.0,
+          "lat": 48.8595,
+          "lon": 2.362
+        },
+        {
+          "elevation_m": 38.0,
+          "lat": 48.865,
+          "lon": 2.374
+        }
+      ],
+      "road_class": "motorway",
+      "segment_id": 2,
+      "segment_type": 2,
+      "speed_limit_kmh": 90.0,
+      "start": {
+        "elevation_m": 45.0,
+        "lat": 48.8595,
+        "lon": 2.362
+      },
+      "traffic_density": 0.1,
+      "travel_time_s": 34.0
+    }
+  ],
+  "speed_profile": {
+    "dt_s": 1.0,
+    "dtype": "float32",
+    "max_speed_ms": 24.0,
+    "min_speed_ms": 6.0,
+    "n_steps": 83,
+    "source": "tomtom_route_to_cycle"
+  }
+}
+

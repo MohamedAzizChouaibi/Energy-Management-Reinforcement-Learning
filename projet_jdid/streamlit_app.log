@@ -1,0 +1,144 @@
+2026-05-28 10:26:27,303 ERROR phase0_dashboard: Route generation failed: TomTom Search/Geocoding API request failed (403) for https://api.tomtom.com/search/2/geocode/Tour%20Eiffel%2C%20Paris%2C%20France.json?key=%3Credacted%3E&limit=1. TomTom returned 403 Forbidden. Check that the API key is valid, the Search/Geocoding API product is enabled for this key, referrer/IP restrictions allow this machine, and quota is not exhausted. Response: {"detailedError":{"code":"InsufficientFunds","message":"You do not have enough credits to perform this action"}}
+Traceback (most recent call last):
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 32, in _raise_for_tomtom_status
+    response.raise_for_status()
+  File "C:\Users\Wassim Hobbyy\AppData\Roaming\Python\Python312\site-packages\requests\models.py", line 1024, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://api.tomtom.com/search/2/geocode/Tour%20Eiffel%2C%20Paris%2C%20France.json?key=cZ4LnZv2ugAtKzXeSwl73DBWX2E5vk2K&limit=1
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\app\streamlit_dashboard.py", line 111, in main
+    payload, _ = build_route_cache(
+                 ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\segmenter_tomtom.py", line 291, in build_route_cache
+    route = fetch_tomtom_route(origin, destination, api_key=api_key)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 122, in fetch_tomtom_route
+    origin_ll = normalize_latlon(origin, api_key=key)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 81, in normalize_latlon
+    return geocode_address(text, api_key=api_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 103, in geocode_address
+    _raise_for_tomtom_status(r, "Search/Geocoding API")
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 45, in _raise_for_tomtom_status
+    raise RuntimeError(f"TomTom {service_name} request failed ({status}) for {safe}.{hint}{detail}") from exc
+RuntimeError: TomTom Search/Geocoding API request failed (403) for https://api.tomtom.com/search/2/geocode/Tour%20Eiffel%2C%20Paris%2C%20France.json?key=%3Credacted%3E&limit=1. TomTom returned 403 Forbidden. Check that the API key is valid, the Search/Geocoding API product is enabled for this key, referrer/IP restrictions allow this machine, and quota is not exhausted. Response: {"detailedError":{"code":"InsufficientFunds","message":"You do not have enough credits to perform this action"}}
+
+2026-05-28 10:28:13,055 ERROR phase0_dashboard: Route generation failed: TomTom Routing API request failed (403) for https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=%3Credacted%3E&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded. TomTom returned 403 Forbidden. Check that the API key is valid, the Routing API product is enabled for this key, referrer/IP restrictions allow this machine, and quota is not exhausted. Response: {"detailedError":{"code":"InsufficientFunds","message":"You do not have enough credits to perform this action"}}
+Traceback (most recent call last):
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 32, in _raise_for_tomtom_status
+    response.raise_for_status()
+  File "C:\Users\Wassim Hobbyy\AppData\Roaming\Python\Python312\site-packages\requests\models.py", line 1024, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=cZ4LnZv2ugAtKzXeSwl73DBWX2E5vk2K&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\app\streamlit_dashboard.py", line 111, in main
+    payload, _ = build_route_cache(
+                 ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\segmenter_tomtom.py", line 291, in build_route_cache
+    route = fetch_tomtom_route(origin, destination, api_key=api_key)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 135, in fetch_tomtom_route
+    _raise_for_tomtom_status(r, "Routing API")
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 45, in _raise_for_tomtom_status
+    raise RuntimeError(f"TomTom {service_name} request failed ({status}) for {safe}.{hint}{detail}") from exc
+RuntimeError: TomTom Routing API request failed (403) for https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=%3Credacted%3E&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded. TomTom returned 403 Forbidden. Check that the API key is valid, the Routing API product is enabled for this key, referrer/IP restrictions allow this machine, and quota is not exhausted. Response: {"detailedError":{"code":"InsufficientFunds","message":"You do not have enough credits to perform this action"}}
+
+2026-05-28 10:28:14,529 ERROR phase0_dashboard: Route generation failed: TomTom Routing API request failed (403) for https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=%3Credacted%3E&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded. TomTom returned 403 Forbidden. Check that the API key is valid, the Routing API product is enabled for this key, referrer/IP restrictions allow this machine, and quota is not exhausted. Response: {"detailedError":{"code":"InsufficientFunds","message":"You do not have enough credits to perform this action"}}
+Traceback (most recent call last):
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 32, in _raise_for_tomtom_status
+    response.raise_for_status()
+  File "C:\Users\Wassim Hobbyy\AppData\Roaming\Python\Python312\site-packages\requests\models.py", line 1024, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=cZ4LnZv2ugAtKzXeSwl73DBWX2E5vk2K&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\app\streamlit_dashboard.py", line 111, in main
+    payload, _ = build_route_cache(
+                 ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\segmenter_tomtom.py", line 291, in build_route_cache
+    route = fetch_tomtom_route(origin, destination, api_key=api_key)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 135, in fetch_tomtom_route
+    _raise_for_tomtom_status(r, "Routing API")
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 45, in _raise_for_tomtom_status
+    raise RuntimeError(f"TomTom {service_name} request failed ({status}) for {safe}.{hint}{detail}") from exc
+RuntimeError: TomTom Routing API request failed (403) for https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=%3Credacted%3E&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded. TomTom returned 403 Forbidden. Check that the API key is valid, the Routing API product is enabled for this key, referrer/IP restrictions allow this machine, and quota is not exhausted. Response: {"detailedError":{"code":"InsufficientFunds","message":"You do not have enough credits to perform this action"}}
+
+2026-05-28 10:28:14,885 ERROR phase0_dashboard: Route generation failed: TomTom Routing API request failed (403) for https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=%3Credacted%3E&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded. TomTom returned 403 Forbidden. Check that the API key is valid, the Routing API product is enabled for this key, referrer/IP restrictions allow this machine, and quota is not exhausted. Response: {"detailedError":{"code":"InsufficientFunds","message":"You do not have enough credits to perform this action"}}
+Traceback (most recent call last):
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 32, in _raise_for_tomtom_status
+    response.raise_for_status()
+  File "C:\Users\Wassim Hobbyy\AppData\Roaming\Python\Python312\site-packages\requests\models.py", line 1024, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=cZ4LnZv2ugAtKzXeSwl73DBWX2E5vk2K&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\app\streamlit_dashboard.py", line 111, in main
+    payload, _ = build_route_cache(
+                 ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\segmenter_tomtom.py", line 291, in build_route_cache
+    route = fetch_tomtom_route(origin, destination, api_key=api_key)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 135, in fetch_tomtom_route
+    _raise_for_tomtom_status(r, "Routing API")
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 45, in _raise_for_tomtom_status
+    raise RuntimeError(f"TomTom {service_name} request failed ({status}) for {safe}.{hint}{detail}") from exc
+RuntimeError: TomTom Routing API request failed (403) for https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=%3Credacted%3E&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded. TomTom returned 403 Forbidden. Check that the API key is valid, the Routing API product is enabled for this key, referrer/IP restrictions allow this machine, and quota is not exhausted. Response: {"detailedError":{"code":"InsufficientFunds","message":"You do not have enough credits to perform this action"}}
+
+2026-05-28 10:28:15,014 ERROR phase0_dashboard: Route generation failed: TomTom Routing API request failed (403) for https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=%3Credacted%3E&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded. TomTom returned 403 Forbidden. Check that the API key is valid, the Routing API product is enabled for this key, referrer/IP restrictions allow this machine, and quota is not exhausted. Response: {"detailedError":{"code":"InsufficientFunds","message":"You do not have enough credits to perform this action"}}
+Traceback (most recent call last):
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 32, in _raise_for_tomtom_status
+    response.raise_for_status()
+  File "C:\Users\Wassim Hobbyy\AppData\Roaming\Python\Python312\site-packages\requests\models.py", line 1024, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=cZ4LnZv2ugAtKzXeSwl73DBWX2E5vk2K&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\app\streamlit_dashboard.py", line 111, in main
+    payload, _ = build_route_cache(
+                 ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\segmenter_tomtom.py", line 291, in build_route_cache
+    route = fetch_tomtom_route(origin, destination, api_key=api_key)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 135, in fetch_tomtom_route
+    _raise_for_tomtom_status(r, "Routing API")
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 45, in _raise_for_tomtom_status
+    raise RuntimeError(f"TomTom {service_name} request failed ({status}) for {safe}.{hint}{detail}") from exc
+RuntimeError: TomTom Routing API request failed (403) for https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=%3Credacted%3E&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded. TomTom returned 403 Forbidden. Check that the API key is valid, the Routing API product is enabled for this key, referrer/IP restrictions allow this machine, and quota is not exhausted. Response: {"detailedError":{"code":"InsufficientFunds","message":"You do not have enough credits to perform this action"}}
+
+2026-05-28 10:28:15,198 ERROR phase0_dashboard: Route generation failed: TomTom Routing API request failed (403) for https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=%3Credacted%3E&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded. TomTom returned 403 Forbidden. Check that the API key is valid, the Routing API product is enabled for this key, referrer/IP restrictions allow this machine, and quota is not exhausted. Response: {"detailedError":{"code":"InsufficientFunds","message":"You do not have enough credits to perform this action"}}
+Traceback (most recent call last):
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 32, in _raise_for_tomtom_status
+    response.raise_for_status()
+  File "C:\Users\Wassim Hobbyy\AppData\Roaming\Python\Python312\site-packages\requests\models.py", line 1024, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=cZ4LnZv2ugAtKzXeSwl73DBWX2E5vk2K&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\app\streamlit_dashboard.py", line 111, in main
+    payload, _ = build_route_cache(
+                 ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\segmenter_tomtom.py", line 291, in build_route_cache
+    route = fetch_tomtom_route(origin, destination, api_key=api_key)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 135, in fetch_tomtom_route
+    _raise_for_tomtom_status(r, "Routing API")
+  File "C:\Users\Wassim Hobbyy\Desktop\projet_jdid\gps\route_fetcher_tomtom.py", line 45, in _raise_for_tomtom_status
+    raise RuntimeError(f"TomTom {service_name} request failed ({status}) for {safe}.{hint}{detail}") from exc
+RuntimeError: TomTom Routing API request failed (403) for https://api.tomtom.com/routing/1/calculateRoute/48.8443,2.373:48.8484,2.3959/json?key=%3Credacted%3E&traffic=true&travelMode=car&routeType=eco&computeTravelTimeFor=all&sectionType=traffic&instructionsType=coded. TomTom returned 403 Forbidden. Check that the API key is valid, the Routing API product is enabled for this key, referrer/IP restrictions allow this machine, and quota is not exhausted. Response: {"detailedError":{"code":"InsufficientFunds","message":"You do not have enough credits to perform this action"}}
+
