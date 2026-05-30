@@ -68,7 +68,20 @@ BATT_NOMINAL_KWH          = 201.6 * 6.5 / 1000.0
 BATT_CYCLE_LIFE           = 1500.0
 BATT_EOL_CAPACITY_LOSS_PCT = 20.0
 
-MODEL_PATH    = PROJECT_ROOT / "models"    / "best_model.zip"
+AZIZ_MODELS_DIR = Path("/home/shuayb/Downloads/aziz-20260530T141744Z-3-001/aziz/models")
+MODEL_PATH    = AZIZ_MODELS_DIR / "best_model.zip"
+
+_AZIZ_DEPLOY_PATH = AZIZ_MODELS_DIR / "deployment_package.json"
+if _AZIZ_DEPLOY_PATH.exists():
+    _meta = json.load(_AZIZ_DEPLOY_PATH.open())
+    AZIZ_FEATURE_NAMES: list[str] = _meta["feature_names"]
+    AZIZ_SCALER_MEAN  = np.array(_meta["scaler"]["mean"],  dtype=np.float32)
+    AZIZ_SCALER_SCALE = np.array(_meta["scaler"]["scale"], dtype=np.float32)
+else:
+    AZIZ_FEATURE_NAMES, AZIZ_SCALER_MEAN, AZIZ_SCALER_SCALE = [], np.array([]), np.array([])
+
+# aziz model: 0=EV, 1=ECO, 2=PWR → THSEnv: 0=EV, 1=ECO, 2=NORMAL, 3=PWR
+AZIZ_ACTION_TO_THSENV = {0: 0, 1: 1, 2: 3}
 SIL_KPIS      = PROJECT_ROOT / "eval"     / "sil_kpis.csv"
 DEFAULT_ROUTE = PROJECT_ROOT / "gps" / "cache" / "sample_route_cache.json"
 
@@ -92,12 +105,23 @@ def _tomtom_key() -> str | None:
 # Cached resources
 # ---------------------------------------------------------------------------
 
+def _available_models() -> list[Path]:
+    """Return all loadable .zip models from the aziz models directory."""
+    if not AZIZ_MODELS_DIR.exists():
+        return [MODEL_PATH] if MODEL_PATH.exists() else []
+    top = sorted(AZIZ_MODELS_DIR.glob("*.zip"))
+    ckpts = sorted((AZIZ_MODELS_DIR / "checkpoints").glob("*.zip"),
+                   key=lambda p: int("".join(filter(str.isdigit, p.stem)) or "0"))
+    return top + ckpts
+
+
 @st.cache_resource(show_spinner=False)
-def load_model():
-    if not MODEL_PATH.exists():
+def load_model(model_path: str):
+    p = Path(model_path)
+    if not p.exists():
         return None
     from stable_baselines3 import PPO
-    return PPO.load(str(MODEL_PATH), device="cpu")
+    return PPO.load(str(p), device="cpu")
 
 
 @st.cache_data(show_spinner=False)
@@ -107,19 +131,127 @@ def load_sil_kpis() -> pd.DataFrame | None:
     return None
 
 
-@st.cache_data(show_spinner=False)
-def fetch_tomtom_route(from_q: str, to_q: str, segment_m: float) -> tuple[dict, str]:
+def _do_fetch_route(
+    from_q: str,
+    to_q: str,
+    segment_m: float,
+    skip_elevation: bool,
+    progress: "st.delta_generator.DeltaGenerator | None" = None,
+) -> tuple[dict, str]:
+    """Inner (uncached) pipeline — called from the cached wrapper below.
+
+    Breaking it out lets the try/except in the button handler see the real
+    exception type (including SystemExit from get_key) and lets us give the
+    user step-level progress without leaking st widgets into the cache.
+    """
     from gps.route_fetcher import fetch_route_data, _slug
     from gps.elevation import elevations_along_route
     from gps.segmenter import build_segments, save_segments
 
-    route      = fetch_route_data(from_q, to_q)
-    elevations = elevations_along_route(route.points)
-    segments   = build_segments(route, elevations, segment_m=segment_m)
+    def _step(msg: str) -> None:
+        if progress is not None:
+            progress.info(msg)
+
+    _step("🌐 Geocoding addresses and calculating route …")
+    route = fetch_route_data(from_q, to_q)
+
+    if skip_elevation:
+        elevations = [0.0] * len(route.points)
+        _step("⛰ Elevation skipped — using flat road (grade = 0).")
+    else:
+        _step("⛰ Downloading elevation DEM from OpenTopography …")
+        try:
+            elevations = elevations_along_route(route.points)
+        except Exception as exc:
+            _step(f"⚠ Elevation failed ({exc}); continuing with grade = 0.")
+            elevations = [0.0] * len(route.points)
+
+    _step("📐 Segmenting route …")
+    segments = build_segments(route, elevations, segment_m=segment_m)
+
     out = (PROJECT_ROOT / "gps" / "cache" /
            f"route_{_slug(route.origin.address)}_{_slug(route.destination.address)}_segments.json")
     save_segments(segments, route, out)
+    _step("✅ Done.")
     return json.loads(out.read_text(encoding="utf-8")), str(out)
+
+
+@st.cache_data(show_spinner=False)
+def _fetch_route_cached(from_q: str, to_q: str, segment_m: float, skip_elevation: bool) -> tuple[dict, str]:
+    """Cached wrapper — no st widgets allowed inside @st.cache_data."""
+    return _do_fetch_route(from_q, to_q, segment_m, skip_elevation, progress=None)
+
+
+# ---------------------------------------------------------------------------
+# Aziz model observation adapter
+# ---------------------------------------------------------------------------
+
+def _build_aziz_obs(env: "THSEnv", prev_aziz_action: int) -> np.ndarray:
+    """Map THSEnv state to the 40-dim StandardScaler-normalised obs the aziz model expects."""
+    soc       = float(env.ems.state.soc) if env.ems is not None else 0.60
+    speed_kmh = env.speed * 3.6
+    slope_pct = float(np.tan(env.grade) * 100.0)
+
+    seg          = env._current_route_segment()
+    seg_type     = int(seg.get("segment_type", env._segment_type(env.speed))) if seg else env._segment_type(env.speed)
+    traffic      = float(seg.get("traffic_density", 0.4)) if seg else 0.4
+    speed_limit  = {0: 30.0, 1: 60.0, 2: 110.0}.get(seg_type, 60.0)
+    stop_density = {0: 5.0,  1: 2.0,  2: 0.5}.get(seg_type, 2.0)
+
+    regen_pot  = float(max(0.0, min(1.0, -env.accel / 3.0))) if env.accel < 0 else 0.0
+    bat_voltage = 201.6 + (soc - 0.6) * 50.0
+
+    p_batt_kw  = float(env.last_out.get("p_batt_kw",  0.0))   if env.last_out else 0.0
+    i_batt_a   = float(env.last_out.get("i_batt_a",   0.0))   if env.last_out else 0.0
+    ice_on     = float(bool(env.last_out.get("ice_on", False))) if env.last_out else 0.0
+    engine_rpm = float(env.last_out.get("engine_rpm", 0.0))   if env.last_out else 0.0
+
+    raw: dict[str, float] = {
+        "seg_length_m":                 300.0,
+        "seg_avg_speed_kmh":            speed_kmh,
+        "seg_speed_limit_kmh":          speed_limit,
+        "seg_traffic_density":          traffic,
+        "seg_congestion_delay_ratio":   traffic,
+        "seg_curvature_rad_m":          0.0,
+        "seg_slope_pct":                slope_pct,
+        "seg_stop_density_per_km":      stop_density,
+        "seg_accel_events_per_km":      max(0.0, env.accel) * 10.0 + 3.0,
+        "seg_regen_opportunity":        regen_pot,
+        "seg_road_type":                float(seg_type),
+        "seg_rush_hour_factor":         1.0,
+        "seg_traffic_density_adjusted": traffic,
+        "seg_avg_speed_adjusted_kmh":   speed_kmh * max(0.3, 1.0 - traffic * 0.3),
+        "seg_traffic_severity_score":   traffic * 4.0,
+        "ths_soc":                      soc,
+        "ths_battery_temp_c":           28.0,
+        "ths_battery_voltage_v":        bat_voltage,
+        "ths_battery_current_a":        i_batt_a,
+        "ths_battery_power_kw":         p_batt_kw,
+        "ths_engine_rpm":               engine_rpm,
+        "ths_engine_temp_c":            85.0,
+        "ths_ice_is_running":           ice_on,
+        "ths_ice_operating_zone":       1.0 if ice_on else 0.0,
+        "ths_vehicle_speed_kmh":        speed_kmh,
+        "ths_regen_potential":          regen_pot,
+        "driver_accel_aggr":            0.40,
+        "driver_brake_aggr":            0.35,
+        "driver_regen_pref":            0.60,
+        "driver_ev_prob":               0.30,
+        "driver_eco_prob":              0.46,
+        "driver_pwr_prob":              0.27,
+        "weather_code":                 0.0,
+        "env_battery_eff":              0.96,
+        "env_regen_eff":                0.92,
+        "env_traffic_speed_factor":     max(0.5, 1.0 - traffic * 0.2),
+        "env_ice_warmup_penalty":       0.0,
+        "departure_hour":               8.0,
+        "rush_hour_active":             0.0,
+        "previous_mode":                float(prev_aziz_action),
+    }
+
+    obs = np.array([raw[f] for f in AZIZ_FEATURE_NAMES], dtype=np.float32)
+    obs = (obs - AZIZ_SCALER_MEAN) / (AZIZ_SCALER_SCALE + 1e-8)
+    return obs
 
 
 # ---------------------------------------------------------------------------
@@ -139,9 +271,18 @@ def run_episode(cycle: str, strategy: str, route_cache: Path | None, model) -> p
     obs, _ = env.reset(seed=0)
     rows: list[dict] = []
     done = False
+    aziz_mode = (strategy == "RL PPO" and model is not None
+                 and model.observation_space.shape == (40,))
+    prev_aziz_action = 1  # default ECO
     while not done:
         if strategy == "RL PPO":
-            action = int(model.predict(obs, deterministic=True)[0])
+            if aziz_mode:
+                aziz_obs = _build_aziz_obs(env, prev_aziz_action)
+                aziz_action = int(model.predict(aziz_obs, deterministic=True)[0])
+                action = AZIZ_ACTION_TO_THSENV[aziz_action]
+                prev_aziz_action = aziz_action
+            else:
+                action = int(model.predict(obs, deterministic=True)[0])
         else:  # Rule-based
             soc    = float(env.ems.state.soc) if env.ems is not None else 0.60
             action = rule_action(float(env.speed), soc)
@@ -501,7 +642,11 @@ def main() -> None:
     # ── global style ──────────────────────────────────────────────────────────
     st.markdown("""
     <style>
-    [data-testid="stAppViewContainer"] { background: #f8fafc; }
+    [data-testid="stAppViewContainer"] { background: #f8fafc; color: #1e293b; }
+    [data-testid="stMain"]             { color: #1e293b; }
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li,
+    [data-testid="stMarkdownContainer"] span { color: #1e293b; }
     [data-testid="stSidebar"]          { background: #1e293b; }
     [data-testid="stSidebar"] *        { color: #f1f5f9 !important; }
     [data-testid="stSidebar"] .stButton>button {
@@ -511,6 +656,14 @@ def main() -> None:
         font-size: 1.1rem; font-weight: 700; color: #1e293b;
         border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin: 1.4rem 0 .8rem;
     }
+    /* metric labels and values */
+    [data-testid="stMetricLabel"]  > div { color: #475569 !important; font-weight: 600; }
+    [data-testid="stMetricValue"]  > div { color: #0f172a !important; font-weight: 700; }
+    [data-testid="stMetricDelta"]  > div { font-weight: 600; }
+    /* dataframe text */
+    .dataframe th, .dataframe td { color: #1e293b !important; }
+    /* captions */
+    [data-testid="stCaptionContainer"] { color: #64748b !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -527,39 +680,81 @@ def main() -> None:
     </div>
     """, unsafe_allow_html=True)
 
-    model = load_model()
-
     # ── sidebar ───────────────────────────────────────────────────────────────
     with st.sidebar:
         st.markdown("## ⚙ Configuration")
+
+        # Model selector
+        available = _available_models()
+        if available:
+            model_labels = [p.name if p.parent == AZIZ_MODELS_DIR
+                            else f"ckpt/{p.name}" for p in available]
+            default_idx = next(
+                (i for i, p in enumerate(available) if p.name == "best_model.zip"), 0
+            )
+            chosen_label = st.selectbox("PPO model", model_labels, index=default_idx)
+            chosen_path = str(available[model_labels.index(chosen_label)])
+        else:
+            chosen_path = str(MODEL_PATH)
+        st.markdown("---")
+
         cycle = st.selectbox("Drive cycle", CYCLES, index=0)
         st.markdown("---")
         st.markdown("### 🗺 Route (TomTom)")
         has_key = _tomtom_key() is not None
         if not has_key:
             st.warning("Set TOMTOM_API_KEY in .env for live routes.")
-        from_q     = st.text_input("From", value="Munich")
-        to_q       = st.text_input("To",   value="Stuttgart")
-        segment_m  = st.slider("Segment length (m)", 100, 1000, 200, step=50)
+        from_q          = st.text_input("From", value="Munich")
+        to_q            = st.text_input("To",   value="Stuttgart")
+        segment_m       = st.slider("Segment length (m)", 100, 1000, 200, step=50)
+        skip_elevation  = st.checkbox("Skip elevation (faster, grade=0)", value=False,
+                                      help="Skips the OpenTopography DEM download. "
+                                           "Grade is set to 0 for all segments.")
         fetch      = st.button("Fetch route", disabled=not has_key)
         use_sample = st.checkbox("Use bundled sample route", value=False)
         st.markdown("---")
-        if model is None:
-            st.error(f"Model not found at\n`{MODEL_PATH}`")
+        if not Path(chosen_path).exists():
+            st.error(f"Model not found:\n`{chosen_path}`")
         run = st.button("▶ Run Episode", type="primary")
 
     if fetch:
+        _progress_slot = st.sidebar.empty()
         try:
-            with st.spinner(f"Fetching {from_q} → {to_q} …"):
-                payload, path = fetch_tomtom_route(from_q, to_q, float(segment_m))
+            # Try the cached result first (instant if args are unchanged).
+            payload, path = _fetch_route_cached(from_q, to_q, float(segment_m), skip_elevation)
+        except BaseException:
+            # Cache miss or stale — run the full pipeline with live progress.
+            try:
+                payload, path = _do_fetch_route(
+                    from_q, to_q, float(segment_m), skip_elevation,
+                    progress=_progress_slot,
+                )
+                # Warm the cache so next click is instant.
+                _fetch_route_cached.clear()
+            except SystemExit as exc:
+                _progress_slot.empty()
+                st.sidebar.error(
+                    f"API key missing: {exc}\n\n"
+                    "Add your keys to `.env` (TOMTOM_API_KEY / OPENTOPO_API_KEY)."
+                )
+                payload, path = None, None
+            except Exception as exc:
+                _progress_slot.empty()
+                st.sidebar.error(f"Route fetch failed: {exc}")
+                payload, path = None, None
+
+        if payload is not None:
+            _progress_slot.empty()
             st.session_state["fetched_route"] = {"payload": payload, "path": path}
-            sc = payload.get("segment_counts", {})
+            sc     = payload.get("segment_counts", {})
+            origin = (payload.get("origin") or {}).get("address", from_q)
+            dest   = (payload.get("destination") or {}).get("address", to_q)
+            length = payload.get("length_m", 0) / 1000.0
             st.sidebar.success(
-                f"{payload['origin']['address']} → {payload['destination']['address']}  "
-                f"({payload['length_m']/1000:.0f} km, {len(payload['segments'])} segs: "
-                f"{sc.get('urban',0)}u / {sc.get('suburban',0)}s / {sc.get('highway',0)}h)")
-        except Exception as exc:
-            st.sidebar.error(f"Route fetch failed: {exc}")
+                f"{origin} → {dest}  "
+                f"({length:.0f} km, {len(payload.get('segments', []))} segs: "
+                f"{sc.get('urban',0)}u / {sc.get('suburban',0)}s / {sc.get('highway',0)}h)"
+            )
 
     # resolve route
     route_path:    Path | None = None
@@ -572,14 +767,20 @@ def main() -> None:
         route_path    = DEFAULT_ROUTE
 
     # run
+    model = load_model(chosen_path)
+
     if run:
         if model is None:
             st.error("No trained model available — cannot run PPO.")
         else:
-            with st.spinner(f"Running PPO + Rule-based on {cycle} …"):
-                runs = build_comparison(cycle, route_path, model)
-            st.session_state["runs"]  = runs
-            st.session_state["meta"]  = {"cycle": cycle, "has_route": route_path is not None}
+            try:
+                with st.spinner(f"Running PPO + Rule-based on {cycle} …"):
+                    runs = build_comparison(cycle, route_path, model)
+                st.session_state["runs"]  = runs
+                st.session_state["meta"]  = {"cycle": cycle, "has_route": route_path is not None}
+                st.sidebar.success(f"✅ Episode done — {cycle}")
+            except Exception as exc:
+                st.error(f"Episode run failed: {exc}")
 
     # ── nothing to display yet ────────────────────────────────────────────────
     if "runs" not in st.session_state:
@@ -592,6 +793,17 @@ def main() -> None:
 
     ppo_m  = episode_metrics(runs["RL PPO"])   if "RL PPO"      in runs else {}
     rule_m = episode_metrics(runs["Rule-based"]) if "Rule-based" in runs else {}
+
+    # ── current run banner ────────────────────────────────────────────────────
+    route_badge = "with GPS route" if meta.get("has_route") else "no GPS route"
+    st.markdown(
+        f'<div style="background:#e0f2fe;border-left:4px solid #0284c7;border-radius:6px;'
+        f'padding:8px 14px;margin-bottom:12px;color:#0c4a6e;font-weight:600">'
+        f'📍 Showing results for: <span style="color:#0369a1">{meta["cycle"]}</span> '
+        f'&nbsp;·&nbsp; {route_badge}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     # ── KPI scorecards ────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">📊 Key Performance Indicators</div>', unsafe_allow_html=True)
