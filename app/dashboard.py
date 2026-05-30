@@ -68,8 +68,8 @@ BATT_NOMINAL_KWH          = 201.6 * 6.5 / 1000.0
 BATT_CYCLE_LIFE           = 1500.0
 BATT_EOL_CAPACITY_LOSS_PCT = 20.0
 
-AZIZ_MODELS_DIR = Path("/home/shuayb/Downloads/aziz-20260530T141744Z-3-001/aziz/models")
-MODEL_PATH    = AZIZ_MODELS_DIR / "best_model.zip"
+AZIZ_MODELS_DIR = PROJECT_ROOT / "models"
+MODEL_PATH    = AZIZ_MODELS_DIR / "aziz_best_model.zip"
 
 _AZIZ_DEPLOY_PATH = AZIZ_MODELS_DIR / "deployment_package.json"
 if _AZIZ_DEPLOY_PATH.exists():
@@ -106,10 +106,10 @@ def _tomtom_key() -> str | None:
 # ---------------------------------------------------------------------------
 
 def _available_models() -> list[Path]:
-    """Return all loadable .zip models from the aziz models directory."""
+    """Return all PPO .zip models from models/ (aziz_* top-level + checkpoints)."""
     if not AZIZ_MODELS_DIR.exists():
         return [MODEL_PATH] if MODEL_PATH.exists() else []
-    top = sorted(AZIZ_MODELS_DIR.glob("*.zip"))
+    top   = sorted(p for p in AZIZ_MODELS_DIR.glob("aziz_*.zip"))
     ckpts = sorted((AZIZ_MODELS_DIR / "checkpoints").glob("*.zip"),
                    key=lambda p: int("".join(filter(str.isdigit, p.stem)) or "0"))
     return top + ckpts
@@ -690,7 +690,7 @@ def main() -> None:
             model_labels = [p.name if p.parent == AZIZ_MODELS_DIR
                             else f"ckpt/{p.name}" for p in available]
             default_idx = next(
-                (i for i, p in enumerate(available) if p.name == "best_model.zip"), 0
+                (i for i, p in enumerate(available) if p.name == "aziz_best_model.zip"), 0
             )
             chosen_label = st.selectbox("PPO model", model_labels, index=default_idx)
             chosen_path = str(available[model_labels.index(chosen_label)])
