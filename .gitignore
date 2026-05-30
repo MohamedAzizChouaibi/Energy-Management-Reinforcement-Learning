@@ -1,15 +1,33 @@
+# Python
 pfa/
 .venv/
 .tmp/
 __pycache__/
 *.py[cod]
 
-# Day 4 secrets
+# Secrets
 .env
 
-# Day 4 regenerable API cache (the bundled sample_route_cache.json stays tracked)
+# Generated outputs at root
+*.csv
+*.png
+
+# Models — track metadata but not large binaries
+models/*.zip
+models/checkpoints/
+models/eval_logs/
+models/*.onnx
+models/*.pkl
+!models/deployment_package.json
+
+# GPS cache — only the bundled sample stays tracked
 gps/cache/dem_*.asc
 gps/cache/geocode_*.json
 gps/cache/traffic_*.json
 gps/cache/route_*.json
 
+# TensorBoard event files
+tb_logs/**/events.out.*
+
+# Jupyter
+.ipynb_checkpoints/
