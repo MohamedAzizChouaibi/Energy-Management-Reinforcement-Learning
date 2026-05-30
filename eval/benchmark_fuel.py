@@ -16,7 +16,7 @@ Outputs:
 
 Usage:
   pfa/bin/python eval/benchmark_fuel.py
-  pfa/bin/python eval/benchmark_fuel.py --cycles WLTC US06 --model models/best_model.zip
+  pfa/bin/python eval/benchmark_fuel.py --cycles WLTC US06 --model models/aziz_best_model.zip
 """
 
 from __future__ import annotations
@@ -59,13 +59,14 @@ MODE_COLORS = {
 
 def run_episode(cycle: str, *, model: PPO | None, fixed_action: int | None) -> pd.DataFrame:
     """Run one full cycle. Pass `model` for the agent or `fixed_action` for a mode."""
+    from env.aziz_adapter import predict as aziz_predict
     env = THSEnv(cycle=cycle)
     obs, _ = env.reset(seed=0)
     rows, step, done = [], 0, False
+    prev = 1
     while not done:
         if model is not None:
-            action, _ = model.predict(obs, deterministic=True)
-            action = int(action)
+            action, prev = aziz_predict(model, env, prev)
         else:
             action = fixed_action
         obs, _reward, terminated, truncated, info = env.step(action)
@@ -145,7 +146,7 @@ def main() -> None:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--cycles", nargs="+", default=list(CYCLES),
                         choices=CYCLES, help="Drive cycles to benchmark.")
-    parser.add_argument("--model", default="models/best_model.zip",
+    parser.add_argument("--model", default="models/aziz_best_model.zip",
                         help="Path to the PPO checkpoint.")
     args = parser.parse_args()
 

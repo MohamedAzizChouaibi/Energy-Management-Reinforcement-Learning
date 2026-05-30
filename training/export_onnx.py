@@ -28,10 +28,10 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from stable_baselines3 import PPO
 
-MODEL_PATH = PROJECT_ROOT / "models" / "best_model.zip"
-ONNX_PATH = PROJECT_ROOT / "models" / "ths_policy.onnx"
-OBS_DIM = 8
-N_ACTIONS = 4
+MODEL_PATH = PROJECT_ROOT / "models" / "aziz_best_model.zip"
+ONNX_PATH  = PROJECT_ROOT / "models" / "aziz_policy.onnx"
+OBS_DIM    = 40
+N_ACTIONS  = 3
 OPSET = 17
 LATENCY_TARGET_MS = 2.0
 N_BENCH = 1000

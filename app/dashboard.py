@@ -71,17 +71,11 @@ BATT_EOL_CAPACITY_LOSS_PCT = 20.0
 AZIZ_MODELS_DIR = PROJECT_ROOT / "models"
 MODEL_PATH    = AZIZ_MODELS_DIR / "aziz_best_model.zip"
 
-_AZIZ_DEPLOY_PATH = AZIZ_MODELS_DIR / "deployment_package.json"
-if _AZIZ_DEPLOY_PATH.exists():
-    _meta = json.load(_AZIZ_DEPLOY_PATH.open())
-    AZIZ_FEATURE_NAMES: list[str] = _meta["feature_names"]
-    AZIZ_SCALER_MEAN  = np.array(_meta["scaler"]["mean"],  dtype=np.float32)
-    AZIZ_SCALER_SCALE = np.array(_meta["scaler"]["scale"], dtype=np.float32)
-else:
-    AZIZ_FEATURE_NAMES, AZIZ_SCALER_MEAN, AZIZ_SCALER_SCALE = [], np.array([]), np.array([])
-
-# aziz model: 0=EV, 1=ECO, 2=PWR → THSEnv: 0=EV, 1=ECO, 2=NORMAL, 3=PWR
-AZIZ_ACTION_TO_THSENV = {0: 0, 1: 1, 2: 3}
+from env.aziz_adapter import (
+    AZIZ_FEATURE_NAMES, AZIZ_SCALER_MEAN, AZIZ_SCALER_SCALE,
+    AZIZ_ACTION_TO_THSENV, build_aziz_obs as _build_aziz_obs_fn,
+    is_aziz_model,
+)
 SIL_KPIS      = PROJECT_ROOT / "eval"     / "sil_kpis.csv"
 DEFAULT_ROUTE = PROJECT_ROOT / "gps" / "cache" / "sample_route_cache.json"
 
@@ -183,77 +177,6 @@ def _fetch_route_cached(from_q: str, to_q: str, segment_m: float, skip_elevation
 
 
 # ---------------------------------------------------------------------------
-# Aziz model observation adapter
-# ---------------------------------------------------------------------------
-
-def _build_aziz_obs(env: "THSEnv", prev_aziz_action: int) -> np.ndarray:
-    """Map THSEnv state to the 40-dim StandardScaler-normalised obs the aziz model expects."""
-    soc       = float(env.ems.state.soc) if env.ems is not None else 0.60
-    speed_kmh = env.speed * 3.6
-    slope_pct = float(np.tan(env.grade) * 100.0)
-
-    seg          = env._current_route_segment()
-    seg_type     = int(seg.get("segment_type", env._segment_type(env.speed))) if seg else env._segment_type(env.speed)
-    traffic      = float(seg.get("traffic_density", 0.4)) if seg else 0.4
-    speed_limit  = {0: 30.0, 1: 60.0, 2: 110.0}.get(seg_type, 60.0)
-    stop_density = {0: 5.0,  1: 2.0,  2: 0.5}.get(seg_type, 2.0)
-
-    regen_pot  = float(max(0.0, min(1.0, -env.accel / 3.0))) if env.accel < 0 else 0.0
-    bat_voltage = 201.6 + (soc - 0.6) * 50.0
-
-    p_batt_kw  = float(env.last_out.get("p_batt_kw",  0.0))   if env.last_out else 0.0
-    i_batt_a   = float(env.last_out.get("i_batt_a",   0.0))   if env.last_out else 0.0
-    ice_on     = float(bool(env.last_out.get("ice_on", False))) if env.last_out else 0.0
-    engine_rpm = float(env.last_out.get("engine_rpm", 0.0))   if env.last_out else 0.0
-
-    raw: dict[str, float] = {
-        "seg_length_m":                 300.0,
-        "seg_avg_speed_kmh":            speed_kmh,
-        "seg_speed_limit_kmh":          speed_limit,
-        "seg_traffic_density":          traffic,
-        "seg_congestion_delay_ratio":   traffic,
-        "seg_curvature_rad_m":          0.0,
-        "seg_slope_pct":                slope_pct,
-        "seg_stop_density_per_km":      stop_density,
-        "seg_accel_events_per_km":      max(0.0, env.accel) * 10.0 + 3.0,
-        "seg_regen_opportunity":        regen_pot,
-        "seg_road_type":                float(seg_type),
-        "seg_rush_hour_factor":         1.0,
-        "seg_traffic_density_adjusted": traffic,
-        "seg_avg_speed_adjusted_kmh":   speed_kmh * max(0.3, 1.0 - traffic * 0.3),
-        "seg_traffic_severity_score":   traffic * 4.0,
-        "ths_soc":                      soc,
-        "ths_battery_temp_c":           28.0,
-        "ths_battery_voltage_v":        bat_voltage,
-        "ths_battery_current_a":        i_batt_a,
-        "ths_battery_power_kw":         p_batt_kw,
-        "ths_engine_rpm":               engine_rpm,
-        "ths_engine_temp_c":            85.0,
-        "ths_ice_is_running":           ice_on,
-        "ths_ice_operating_zone":       1.0 if ice_on else 0.0,
-        "ths_vehicle_speed_kmh":        speed_kmh,
-        "ths_regen_potential":          regen_pot,
-        "driver_accel_aggr":            0.40,
-        "driver_brake_aggr":            0.35,
-        "driver_regen_pref":            0.60,
-        "driver_ev_prob":               0.30,
-        "driver_eco_prob":              0.46,
-        "driver_pwr_prob":              0.27,
-        "weather_code":                 0.0,
-        "env_battery_eff":              0.96,
-        "env_regen_eff":                0.92,
-        "env_traffic_speed_factor":     max(0.5, 1.0 - traffic * 0.2),
-        "env_ice_warmup_penalty":       0.0,
-        "departure_hour":               8.0,
-        "rush_hour_active":             0.0,
-        "previous_mode":                float(prev_aziz_action),
-    }
-
-    obs = np.array([raw[f] for f in AZIZ_FEATURE_NAMES], dtype=np.float32)
-    obs = (obs - AZIZ_SCALER_MEAN) / (AZIZ_SCALER_SCALE + 1e-8)
-    return obs
-
-
 # ---------------------------------------------------------------------------
 # Episode runner
 # ---------------------------------------------------------------------------
@@ -271,13 +194,12 @@ def run_episode(cycle: str, strategy: str, route_cache: Path | None, model) -> p
     obs, _ = env.reset(seed=0)
     rows: list[dict] = []
     done = False
-    aziz_mode = (strategy == "RL PPO" and model is not None
-                 and model.observation_space.shape == (40,))
+    aziz_mode = strategy == "RL PPO" and model is not None and is_aziz_model(model)
     prev_aziz_action = 1  # default ECO
     while not done:
         if strategy == "RL PPO":
             if aziz_mode:
-                aziz_obs = _build_aziz_obs(env, prev_aziz_action)
+                aziz_obs = _build_aziz_obs_fn(env, prev_aziz_action)
                 aziz_action = int(model.predict(aziz_obs, deterministic=True)[0])
                 action = AZIZ_ACTION_TO_THSENV[aziz_action]
                 prev_aziz_action = aziz_action

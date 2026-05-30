@@ -26,7 +26,7 @@ CYCLES = ("WLTC", "FTP75", "US06")
 MODES = ("EV", "ECO", "NORMAL", "PWR")
 ACTION_MAP = {"EV": 0, "ECO": 1, "NORMAL": 2, "PWR": 3}
 FIGURE_DIR = PROJECT_ROOT / "eval" / "figures"
-MODEL_PATH = PROJECT_ROOT / "models" / "best_model.zip"
+MODEL_PATH = PROJECT_ROOT / "models" / "aziz_best_model.zip"
 
 
 # ---------------------------------------------------------------------------
@@ -34,12 +34,14 @@ MODEL_PATH = PROJECT_ROOT / "models" / "best_model.zip"
 # ---------------------------------------------------------------------------
 
 def run_agent(model: PPO, cycle: str) -> pd.DataFrame:
+    from env.aziz_adapter import predict as aziz_predict
     env = THSEnv(cycle=cycle)
     obs, _ = env.reset(seed=0)
     rows, step, done = [], 0, False
+    prev = 1
     while not done:
-        action, _ = model.predict(obs, deterministic=True)
-        obs, reward, terminated, truncated, info = env.step(int(action))
+        action, prev = aziz_predict(model, env, prev)
+        obs, reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
         rows.append(_row(info, step, int(action), float(reward)))
         step += 1

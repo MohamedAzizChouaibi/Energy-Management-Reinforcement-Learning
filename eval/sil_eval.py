@@ -47,7 +47,7 @@ SEGMENT_LABELS = {0: "Urban", 1: "Suburban", 2: "Highway"}
 N_RUNS = 3
 SEEDS = tuple(range(N_RUNS))
 
-MODEL_PATH = PROJECT_ROOT / "models" / "best_model.zip"
+MODEL_PATH = PROJECT_ROOT / "models" / "aziz_best_model.zip"
 ROUTE_CACHE = PROJECT_ROOT / "gps" / "cache" / "sample_route_cache.json"
 FIGURE_DIR = PROJECT_ROOT / "eval" / "figures"
 
@@ -78,6 +78,8 @@ def _segment_type(speed_kmh: float) -> int:
 
 def run_episode(cycle: str, policy, *, seed: int, route_cache: Path | None = None) -> pd.DataFrame:
     """Run one episode. ``policy(obs, info, env) -> action`` selects each step."""
+    if hasattr(policy, "reset"):
+        policy.reset()
     env = THSEnv(cycle=cycle, route_cache=route_cache)
     obs, _ = env.reset(seed=seed)
     rows: list[dict] = []
@@ -113,10 +115,8 @@ def run_episode(cycle: str, policy, *, seed: int, route_cache: Path | None = Non
 # --- policies --------------------------------------------------------------
 
 def make_agent_policy(model: PPO):
-    def _policy(obs, info, env):
-        action, _ = model.predict(obs, deterministic=True)
-        return int(action)
-    return _policy
+    from env.aziz_adapter import AzizPolicy
+    return AzizPolicy(model)
 
 
 def rule_policy(obs, info, env):

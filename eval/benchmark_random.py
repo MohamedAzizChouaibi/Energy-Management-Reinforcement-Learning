@@ -79,9 +79,27 @@ def run_random(cycle: str, seed: int) -> dict:
 
 
 def run_agent(cycle: str, model: PPO) -> dict:
+    from env.aziz_adapter import predict as aziz_predict
     env = THSEnv(cycle=cycle)
-    kpi = _episode_fuel(env, lambda obs: model.predict(obs, deterministic=True)[0])
-    kpi.update({"cycle": cycle})
+    obs, _ = env.reset(seed=0)
+    fuel_total, soc_last, soc_min, dist_m, done = 0.0, 60.0, 100.0, 0.0, False
+    prev = 1
+    while not done:
+        action, prev = aziz_predict(model, env, prev)
+        obs, _r, terminated, truncated, info = env.step(action)
+        done = terminated or truncated
+        fuel_total = float(info["fuel_total_g"])
+        soc_last   = float(info["soc_pct"])
+        soc_min    = min(soc_min, soc_last)
+        dist_m    += float(info["target_speed_ms"]) * DT_PROFILE_S
+    dist_km = dist_m / 1000.0
+    kpi = {
+        "total_fuel_g":  round(fuel_total, 2),
+        "fuel_g_per_km": round(fuel_total / dist_km, 4) if dist_km > 0 else float("nan"),
+        "soc_final_pct": round(soc_last, 2),
+        "soc_min_pct":   round(soc_min, 2),
+        "cycle": cycle,
+    }
     return kpi
 
 
@@ -146,7 +164,7 @@ def main() -> None:
     parser.add_argument("--cycles", nargs="+", default=list(CYCLES), choices=CYCLES)
     parser.add_argument("--seeds", type=int, default=10,
                         help="Number of random-policy seeds per cycle.")
-    parser.add_argument("--model", default="models/best_model.zip")
+    parser.add_argument("--model", default="models/aziz_best_model.zip")
     args = parser.parse_args()
 
     model_path = (PROJECT_ROOT / args.model) if not Path(args.model).is_absolute() else Path(args.model)
