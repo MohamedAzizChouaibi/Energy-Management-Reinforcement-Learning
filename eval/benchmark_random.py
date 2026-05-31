@@ -1,21 +1,8 @@
 """Random-policy baseline test: how much fuel does picking modes at random cost?
 
-A random policy is the standard RL sanity check — a trained agent must clearly
-beat it. This script runs a uniformly-random mode selector (a fresh DriveMode
-chosen every step) across several seeds per cycle so we capture the spread, then
-compares the random mean ± std against the PPO agent and the best fixed mode.
-
-Everything runs through the same THSEnv as eval/benchmark_fuel.py, so fuel
-numbers are directly comparable across all three scripts. Fuel is read from the
-EMS accumulator (info["fuel_total_g"]), never integrated from the rate.
-
-Outputs:
-  eval/random_benchmark_kpis.csv            per (cycle, seed) random-run KPIs
-  eval/figures/random_benchmark_fuel.png    random mean±std vs agent vs best mode
-
 Usage:
-  pfa/bin/python eval/benchmark_random.py
-  pfa/bin/python eval/benchmark_random.py --cycles WLTC --seeds 20
+  pfa/bin/python eval/benchmark_random.py --route-cache gps/cache/route_munich_stuttgart_segments.json
+  pfa/bin/python eval/benchmark_random.py --route-cache route1.json route2.json --seeds 20
 """
 
 from __future__ import annotations
@@ -35,7 +22,6 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from env.ths_env import THSEnv
 
-CYCLES = ("WLTC", "FTP75", "US06")
 MODES = ("EV", "ECO", "NORMAL", "PWR")
 ACTION_MAP = {"EV": 0, "ECO": 1, "NORMAL": 2, "PWR": 3}
 N_ACTIONS = len(MODES)
@@ -45,12 +31,7 @@ FIGURE_DIR = PROJECT_ROOT / "eval" / "figures"
 KPI_CSV = PROJECT_ROOT / "eval" / "random_benchmark_kpis.csv"
 
 
-# ---------------------------------------------------------------------------
-# Episode runners
-# ---------------------------------------------------------------------------
-
 def _episode_fuel(env: THSEnv, action_fn) -> dict:
-    """Run one full cycle, choosing each action via action_fn(obs). Return KPIs."""
     obs, _ = env.reset(seed=0)
     fuel_total, soc_last, soc_min, dist_m, done = 0.0, 60.0, 100.0, 0.0, False
     while not done:
@@ -70,17 +51,17 @@ def _episode_fuel(env: THSEnv, action_fn) -> dict:
     }
 
 
-def run_random(cycle: str, seed: int) -> dict:
+def run_random(route_cache: str, seed: int) -> dict:
     rng = np.random.default_rng(seed)
-    env = THSEnv(cycle=cycle)
+    env = THSEnv(route_cache)
     kpi = _episode_fuel(env, lambda _obs: rng.integers(N_ACTIONS))
-    kpi.update({"cycle": cycle, "seed": seed})
+    kpi.update({"route": Path(route_cache).stem, "seed": seed})
     return kpi
 
 
-def run_agent(cycle: str, model: PPO) -> dict:
+def run_agent(route_cache: str, model: PPO) -> dict:
     from env.aziz_adapter import predict as aziz_predict
-    env = THSEnv(cycle=cycle)
+    env = THSEnv(route_cache)
     obs, _ = env.reset(seed=0)
     fuel_total, soc_last, soc_min, dist_m, done = 0.0, 60.0, 100.0, 0.0, False
     prev = 1
@@ -93,39 +74,34 @@ def run_agent(cycle: str, model: PPO) -> dict:
         soc_min    = min(soc_min, soc_last)
         dist_m    += float(info["target_speed_ms"]) * DT_PROFILE_S
     dist_km = dist_m / 1000.0
-    kpi = {
+    return {
         "total_fuel_g":  round(fuel_total, 2),
         "fuel_g_per_km": round(fuel_total / dist_km, 4) if dist_km > 0 else float("nan"),
         "soc_final_pct": round(soc_last, 2),
         "soc_min_pct":   round(soc_min, 2),
-        "cycle": cycle,
+        "route": Path(route_cache).stem,
     }
-    return kpi
 
 
-def run_fixed(cycle: str, mode: str) -> dict:
-    env = THSEnv(cycle=cycle)
+def run_fixed(route_cache: str, mode: str) -> dict:
+    env = THSEnv(route_cache)
     action = ACTION_MAP[mode]
     kpi = _episode_fuel(env, lambda _obs: action)
-    kpi.update({"cycle": cycle, "mode": mode})
+    kpi.update({"route": Path(route_cache).stem, "mode": mode})
     return kpi
 
 
-# ---------------------------------------------------------------------------
-# Plot
-# ---------------------------------------------------------------------------
-
 def plot_random_vs_agent(rand_df: pd.DataFrame, agent: dict[str, float],
-                         best_mode: dict[str, dict], cycles: list[str], out: Path) -> Path:
+                         best_mode: dict[str, dict], routes: list[str], out: Path) -> Path:
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-    x = np.arange(len(cycles))
+    x = np.arange(len(routes))
     width = 0.25
 
-    rand_mean = [rand_df[rand_df["cycle"] == c]["total_fuel_g"].mean() for c in cycles]
-    rand_std = [rand_df[rand_df["cycle"] == c]["total_fuel_g"].std(ddof=0) for c in cycles]
-    agent_vals = [agent[c] for c in cycles]
-    best_vals = [best_mode[c]["total_fuel_g"] for c in cycles]
-    best_lbls = [best_mode[c]["mode"] for c in cycles]
+    rand_mean = [rand_df[rand_df["route"] == r]["total_fuel_g"].mean() for r in routes]
+    rand_std = [rand_df[rand_df["route"] == r]["total_fuel_g"].std(ddof=0) for r in routes]
+    agent_vals = [agent[r] for r in routes]
+    best_vals = [best_mode[r]["total_fuel_g"] for r in routes]
+    best_lbls = [best_mode[r]["mode"] for r in routes]
 
     fig, ax = plt.subplots(figsize=(11, 6))
     ax.bar(x - width, rand_mean, width, yerr=rand_std, capsize=4,
@@ -143,9 +119,9 @@ def plot_random_vs_agent(rand_df: pd.DataFrame, agent: dict[str, float],
         ax.text(xi + width, av, f"{av:.0f}", ha="center", va="bottom", fontsize=8)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(cycles)
+    ax.set_xticklabels(routes, rotation=15, ha="right")
     ax.set_ylabel("Total fuel (g)")
-    ax.set_title("Random-Policy Baseline vs Best Fixed Mode vs PPO Agent  (THSEnv)")
+    ax.set_title("Random-Policy Baseline vs Best Fixed Mode vs PPO Agent")
     ax.legend(fontsize=9)
     ax.grid(axis="y", alpha=0.3)
     plt.tight_layout()
@@ -154,16 +130,13 @@ def plot_random_vs_agent(rand_df: pd.DataFrame, agent: dict[str, float],
     return out
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--cycles", nargs="+", default=list(CYCLES), choices=CYCLES)
+    parser.add_argument("--route-cache", nargs="+", required=True,
+                        help="One or more RouteSegment JSON paths.")
     parser.add_argument("--seeds", type=int, default=10,
-                        help="Number of random-policy seeds per cycle.")
+                        help="Number of random-policy seeds per route.")
     parser.add_argument("--model", default="models/aziz_best_model.zip")
     args = parser.parse_args()
 
@@ -173,26 +146,26 @@ def main() -> None:
     print(f"Loading PPO model from {model_path} ...")
     model = PPO.load(str(model_path))
 
+    routes = [Path(p).stem for p in args.route_cache]
     rand_rows: list[dict] = []
     agent_fuel: dict[str, float] = {}
-    best_mode: dict[str, dict] = {}
+    best_mode_map: dict[str, dict] = {}
 
-    for cycle in args.cycles:
-        print(f"\n--- {cycle} ---")
+    for route_path, route in zip(args.route_cache, routes):
+        print(f"\n--- {route} ---")
 
-        # Best fixed mode (reference floor for the random policy to be judged against)
-        fixed = [run_fixed(cycle, m) for m in MODES]
+        fixed = [run_fixed(route_path, m) for m in MODES]
         best = min(fixed, key=lambda r: r["total_fuel_g"])
-        best_mode[cycle] = best
+        best_mode_map[route] = best
         print(f"  Best fixed mode: {best['mode']:<6} {best['total_fuel_g']:8.1f} g")
 
-        a = run_agent(cycle, model)
-        agent_fuel[cycle] = a["total_fuel_g"]
+        a = run_agent(route_path, model)
+        agent_fuel[route] = a["total_fuel_g"]
         print(f"  PPO Agent:           {a['total_fuel_g']:8.1f} g  SOC_f={a['soc_final_pct']:5.1f}%")
 
         fuels = []
         for s in range(args.seeds):
-            r = run_random(cycle, seed=1000 + s)
+            r = run_random(route_path, seed=1000 + s)
             rand_rows.append(r)
             fuels.append(r["total_fuel_g"])
         fuels = np.array(fuels)
@@ -205,7 +178,7 @@ def main() -> None:
     rand_df.to_csv(KPI_CSV, index=False)
     print(f"\nRandom-run KPIs -> {KPI_CSV}")
 
-    fig = plot_random_vs_agent(rand_df, agent_fuel, best_mode, args.cycles,
+    fig = plot_random_vs_agent(rand_df, agent_fuel, best_mode_map, routes,
                                FIGURE_DIR / "random_benchmark_fuel.png")
     print(f"Figure          -> {fig}")
 

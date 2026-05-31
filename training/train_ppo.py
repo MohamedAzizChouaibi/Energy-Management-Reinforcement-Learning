@@ -1,24 +1,24 @@
 """PPO training entry point for the THS-II Gymnasium environment.
 
-Enhancements over the Day 2 baseline:
-  * Parallel rollouts via SubprocVecEnv for much higher throughput.
-  * VecNormalize reward normalisation (observations are already normalised
-    inside the env) which stabilises the value function under the shaped,
-    charge-sustaining reward.
-  * Linear-decay schedules for the learning rate and PPO clip range.
-  * A small entropy bonus to keep mode exploration alive early on.
-  * Evaluation across all three drive cycles, not just WLTC.
+Speed profiles come from real GPS routes (TomTom + OpenTopography) rather
+than static drive-cycle CSVs. Fetch a route first with:
+
+  pfa/bin/python gps/route_fetcher.py --from Munich --to Stuttgart \\
+      --out gps/cache/route_munich_stuttgart_segments.json
+
+then train on it:
+
+  pfa/bin/python training/train_ppo.py \\
+      --route-cache gps/cache/route_munich_stuttgart_segments.json
 """
 
 from __future__ import annotations
 
 import argparse
-import random
 import sys
 from pathlib import Path
 from typing import Callable
 
-import numpy as np
 import torch.nn as nn
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback
@@ -37,20 +37,19 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from env.ths_env import THSEnv
 
-ALL_CYCLES = ("WLTC", "FTP75", "US06")
-
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train PPO on THSEnv.")
-    parser.add_argument("--cycle", default="all", choices=("WLTC", "FTP75", "US06", "all"),
-                        help="Drive cycle to train on. 'all' randomises per episode.")
-    parser.add_argument("--route-cache", default=None)
+    parser = argparse.ArgumentParser(description="Train PPO on THSEnv with a GPS route.")
+    parser.add_argument("--route-cache", required=True,
+                        help="Path to RouteSegment JSON (gps/cache/*_segments.json).")
+    parser.add_argument("--eval-route-cache", default=None,
+                        help="Separate route cache for eval; falls back to --route-cache.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--total-timesteps", type=int, default=2_000_000)
     parser.add_argument("--n-envs", type=int, default=8, help="Parallel rollout workers.")
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--lr-final-frac", type=float, default=0.1,
-                        help="Final LR as a fraction of the initial LR (linear decay).")
+                        help="Final LR as a fraction of initial LR (linear decay).")
     parser.add_argument("--n-steps", type=int, default=1024, help="Rollout length per env.")
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--n-epochs", type=int, default=10)
@@ -58,61 +57,33 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--clip-range", type=float, default=0.2)
     parser.add_argument("--ent-coef", type=float, default=0.01)
-    parser.add_argument("--no-vecnormalize", action="store_true",
-                        help="Disable reward normalisation (kept for ablation).")
+    parser.add_argument("--no-vecnormalize", action="store_true")
     parser.add_argument("--eval-freq", type=int, default=25_000,
-                        help="Eval frequency in steps PER ENV.")
+                        help="Eval frequency in steps per env.")
     parser.add_argument("--n-eval-episodes", type=int, default=3)
     parser.add_argument("--model-dir", default="models")
     parser.add_argument("--tensorboard-log", default="tb_logs")
     parser.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
-    parser.add_argument("--resume", default=None, help="Path to existing model zip to resume training.")
+    parser.add_argument("--resume", default=None, help="Path to existing model zip to resume.")
     return parser.parse_args()
 
 
-class MultiCycleEnv(THSEnv):
-    """Randomly picks a drive cycle on each reset for better generalisation."""
-
-    def __init__(self, seed: int = 0, route_cache=None):
-        self._rng = random.Random(seed)
-        super().__init__(cycle=self._rng.choice(ALL_CYCLES), route_cache=route_cache)
-
-    def reset(self, *, seed=None, options=None):
-        self.cycle_name = self._rng.choice(ALL_CYCLES)
-        self.cycle_path = (
-            Path(__file__).resolve().parents[1]
-            / "env" / "drive_cycles"
-            / self.CYCLE_FILES[self.cycle_name]
-        )
-        return super().reset(seed=seed, options=options)
-
-
-def _make_single_env(cycle: str, seed: int, route_cache=None) -> Callable[[], Monitor]:
-    """Return a thunk that builds one Monitor-wrapped env (for VecEnv workers)."""
-
+def _make_single_env(route_cache: str, seed: int) -> Callable[[], Monitor]:
     def _init() -> Monitor:
-        if cycle == "all":
-            env = MultiCycleEnv(seed=seed, route_cache=route_cache)
-        else:
-            env = THSEnv(cycle, route_cache=route_cache)
+        env = THSEnv(route_cache)
         env.reset(seed=seed)
         return Monitor(env)
-
     return _init
 
 
-def make_vec_env(cycle: str, seed: int, n_envs: int, route_cache=None):
-    thunks = [_make_single_env(cycle, seed + i, route_cache) for i in range(n_envs)]
+def make_vec_env(route_cache: str, seed: int, n_envs: int):
+    thunks = [_make_single_env(route_cache, seed + i) for i in range(n_envs)]
     if n_envs == 1:
         return DummyVecEnv(thunks)
     return SubprocVecEnv(thunks, start_method="spawn")
 
 
 def linear_schedule(initial: float, final_frac: float) -> Callable[[float], float]:
-    """Linear decay from ``initial`` to ``initial * final_frac`` over training.
-
-    ``progress_remaining`` runs 1.0 -> 0.0, so this is a standard linear anneal.
-    """
     final = initial * final_frac
 
     def _schedule(progress_remaining: float) -> float:
@@ -131,22 +102,19 @@ def main() -> None:
     tensorboard_log.mkdir(parents=True, exist_ok=True)
 
     use_vecnorm = not args.no_vecnormalize
+    eval_cache = args.eval_route_cache or args.route_cache
 
-    # --- training env ------------------------------------------------------
-    train_env = make_vec_env(args.cycle, args.seed, args.n_envs, args.route_cache)
+    train_env = make_vec_env(args.route_cache, args.seed, args.n_envs)
     train_env = VecMonitor(train_env)
     if use_vecnorm:
-        # Observations are already in [-1, 1] from the env, so only the shaped
-        # reward needs whitening for a stable value function.
         train_env = VecNormalize(train_env, norm_obs=False, norm_reward=True, clip_reward=10.0)
 
-    # --- eval env: all three cycles for a representative metric ------------
-    eval_env = make_vec_env("all", args.seed + 10_000, max(1, args.n_envs // 2), args.route_cache)
+    eval_env = make_vec_env(eval_cache, args.seed + 10_000, max(1, args.n_envs // 2))
     eval_env = VecMonitor(eval_env)
     if use_vecnorm:
         eval_env = VecNormalize(eval_env, norm_obs=False, norm_reward=True, clip_reward=10.0)
-        eval_env.training = False           # freeze running stats during eval
-        eval_env.norm_reward = False        # report raw episode reward
+        eval_env.training = False
+        eval_env.norm_reward = False
 
     eval_callback = EvalCallback(
         eval_env,
@@ -193,17 +161,16 @@ def main() -> None:
             verbose=1,
         )
 
-    cycle_label = args.cycle if args.cycle != "all" else "WLTC+FTP75+US06"
     rollout = args.n_steps * args.n_envs
-    print(f"Training PPO on {cycle_label} for {args.total_timesteps:,} timesteps")
-    print(f"Net 128x128 (pi/vf) | {args.n_envs} envs | rollout={rollout} | batch={args.batch_size} "
-          f"| ent={args.ent_coef} | vecnorm={use_vecnorm}")
-    print(f"Eval on all cycles every {args.eval_freq:,} env-steps ({args.n_eval_episodes} eps)")
+    route_label = Path(args.route_cache).stem
+    print(f"Training PPO on '{route_label}' for {args.total_timesteps:,} timesteps")
+    print(f"Net 128x128 (pi/vf) | {args.n_envs} envs | rollout={rollout} | "
+          f"batch={args.batch_size} | ent={args.ent_coef} | vecnorm={use_vecnorm}")
 
     model.learn(
         total_timesteps=args.total_timesteps,
         callback=eval_callback,
-        tb_log_name=f"ppo_{args.cycle.lower()}",
+        tb_log_name=f"ppo_{route_label}",
         reset_num_timesteps=args.resume is None,
     )
 

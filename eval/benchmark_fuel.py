@@ -1,22 +1,8 @@
 """Benchmark fuel consumption: each fixed drive mode vs. the PPO agent.
 
-Every contender (the four fixed modes EV/ECO/NORMAL/PWR and the trained PPO
-agent) is run through the *same* THSEnv so fuel numbers are directly
-comparable. Fuel is read from the EMS accumulator (info["fuel_total_g"]),
-never integrated from the rate, so the env dt is accounted for correctly.
-
-The agent's policy normalises observations inside the env (VecNormalize was
-configured with norm_obs=False), so the bare PPO checkpoint reproduces training
-behaviour without vecnormalize.pkl.
-
-Outputs:
-  eval/fuel_benchmark_kpis.csv          per (cycle, contender) fuel KPIs
-  eval/figures/fuel_benchmark_total.png grouped bar: total fuel (g) per cycle
-  eval/figures/fuel_benchmark_per_km.png grouped bar: fuel economy (g/km)
-
 Usage:
-  pfa/bin/python eval/benchmark_fuel.py
-  pfa/bin/python eval/benchmark_fuel.py --cycles WLTC US06 --model models/aziz_best_model.zip
+  pfa/bin/python eval/benchmark_fuel.py --route-cache gps/cache/route_munich_stuttgart_segments.json
+  pfa/bin/python eval/benchmark_fuel.py --route-cache route1.json route2.json --model models/aziz_best_model.zip
 """
 
 from __future__ import annotations
@@ -36,10 +22,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from env.ths_env import THSEnv
 
-CYCLES = ("WLTC", "FTP75", "US06")
 MODES = ("EV", "ECO", "NORMAL", "PWR")
 ACTION_MAP = {"EV": 0, "ECO": 1, "NORMAL": 2, "PWR": 3}
-DT_PROFILE_S = 1.0  # each profile sample represents 1 s of the drive cycle
+DT_PROFILE_S = 1.0
 
 FIGURE_DIR = PROJECT_ROOT / "eval" / "figures"
 KPI_CSV = PROJECT_ROOT / "eval" / "fuel_benchmark_kpis.csv"
@@ -53,14 +38,9 @@ MODE_COLORS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Episode runners — fixed-mode plays one action; the agent predicts each step
-# ---------------------------------------------------------------------------
-
-def run_episode(cycle: str, *, model: PPO | None, fixed_action: int | None) -> pd.DataFrame:
-    """Run one full cycle. Pass `model` for the agent or `fixed_action` for a mode."""
+def run_episode(route_cache: str, *, model: PPO | None, fixed_action: int | None) -> pd.DataFrame:
     from env.aziz_adapter import predict as aziz_predict
-    env = THSEnv(cycle=cycle)
+    env = THSEnv(route_cache)
     obs, _ = env.reset(seed=0)
     rows, step, done = [], 0, False
     prev = 1
@@ -82,11 +62,11 @@ def run_episode(cycle: str, *, model: PPO | None, fixed_action: int | None) -> p
     return pd.DataFrame(rows)
 
 
-def compute_kpis(df: pd.DataFrame, cycle: str, label: str) -> dict:
+def compute_kpis(df: pd.DataFrame, route: str, label: str) -> dict:
     total_fuel_g = float(df["fuel_total_g"].iloc[-1])
     dist_km = float(np.sum(df["speed_ms"].to_numpy() * DT_PROFILE_S) / 1000.0)
     return {
-        "cycle":           cycle,
+        "route":           route,
         "contender":       label,
         "total_fuel_g":    round(total_fuel_g, 2),
         "fuel_g_per_km":   round(total_fuel_g / dist_km, 4) if dist_km > 0 else float("nan"),
@@ -97,21 +77,17 @@ def compute_kpis(df: pd.DataFrame, cycle: str, label: str) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Plots
-# ---------------------------------------------------------------------------
-
 def _grouped_bar(kpis: pd.DataFrame, value_col: str, ylabel: str, title: str,
-                 cycles: list[str], contenders: list[str], out: Path) -> Path:
+                 routes: list[str], contenders: list[str], out: Path) -> Path:
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-    x = np.arange(len(cycles))
+    x = np.arange(len(routes))
     width = 0.8 / len(contenders)
 
     fig, ax = plt.subplots(figsize=(11, 6))
     for i, name in enumerate(contenders):
         vals = [
-            float(kpis[(kpis["cycle"] == c) & (kpis["contender"] == name)][value_col].iloc[0])
-            for c in cycles
+            float(kpis[(kpis["route"] == r) & (kpis["contender"] == name)][value_col].iloc[0])
+            for r in routes
         ]
         offset = (i - (len(contenders) - 1) / 2) * width
         is_agent = name == "Agent"
@@ -126,7 +102,7 @@ def _grouped_bar(kpis: pd.DataFrame, value_col: str, ylabel: str, title: str,
                     f"{v:.0f}", ha="center", va="bottom", fontsize=7, rotation=90)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(cycles)
+    ax.set_xticklabels(routes, rotation=15, ha="right")
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.legend(ncol=len(contenders), fontsize=9)
@@ -137,15 +113,11 @@ def _grouped_bar(kpis: pd.DataFrame, value_col: str, ylabel: str, title: str,
     return out
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--cycles", nargs="+", default=list(CYCLES),
-                        choices=CYCLES, help="Drive cycles to benchmark.")
+    parser.add_argument("--route-cache", nargs="+", required=True,
+                        help="One or more RouteSegment JSON paths to benchmark.")
     parser.add_argument("--model", default="models/aziz_best_model.zip",
                         help="Path to the PPO checkpoint.")
     args = parser.parse_args()
@@ -157,20 +129,21 @@ def main() -> None:
     print(f"Loading PPO model from {model_path} ...")
     model = PPO.load(str(model_path))
 
+    routes = [Path(p).stem for p in args.route_cache]
     rows: list[dict] = []
-    for cycle in args.cycles:
-        print(f"\n--- {cycle} ---")
+    for route_path, route in zip(args.route_cache, routes):
+        print(f"\n--- {route} ---")
         for mode in MODES:
-            df = run_episode(cycle, model=None, fixed_action=ACTION_MAP[mode])
-            kpi = compute_kpis(df, cycle, mode)
+            df = run_episode(route_path, model=None, fixed_action=ACTION_MAP[mode])
+            kpi = compute_kpis(df, route, mode)
             rows.append(kpi)
             print(f"  Fixed {mode:<6} fuel={kpi['total_fuel_g']:8.1f} g "
                   f"({kpi['fuel_g_per_km']:6.2f} g/km)  SOC_f={kpi['soc_final_pct']:5.1f}%")
 
-        df = run_episode(cycle, model=model, fixed_action=None)
-        kpi = compute_kpis(df, cycle, "Agent")
+        df = run_episode(route_path, model=model, fixed_action=None)
+        kpi = compute_kpis(df, route, "Agent")
         rows.append(kpi)
-        best_mode = min((r for r in rows if r["cycle"] == cycle and r["contender"] != "Agent"),
+        best_mode = min((r for r in rows if r["route"] == route and r["contender"] != "Agent"),
                         key=lambda r: r["total_fuel_g"])
         delta = kpi["total_fuel_g"] - best_mode["total_fuel_g"]
         print(f"  PPO Agent    fuel={kpi['total_fuel_g']:8.1f} g "
@@ -183,13 +156,11 @@ def main() -> None:
 
     contenders = list(MODES) + ["Agent"]
     f1 = _grouped_bar(kpis, "total_fuel_g", "Total fuel (g)",
-                      "Fuel Consumption: Fixed Modes vs PPO Agent  (THSEnv)",
-                      args.cycles, contenders,
-                      FIGURE_DIR / "fuel_benchmark_total.png")
+                      "Fuel Consumption: Fixed Modes vs PPO Agent",
+                      routes, contenders, FIGURE_DIR / "fuel_benchmark_total.png")
     f2 = _grouped_bar(kpis, "fuel_g_per_km", "Fuel economy (g/km)",
-                      "Fuel Economy: Fixed Modes vs PPO Agent  (THSEnv)",
-                      args.cycles, contenders,
-                      FIGURE_DIR / "fuel_benchmark_per_km.png")
+                      "Fuel Economy: Fixed Modes vs PPO Agent",
+                      routes, contenders, FIGURE_DIR / "fuel_benchmark_per_km.png")
     print(f"Total-fuel bar  -> {f1}")
     print(f"Per-km bar      -> {f2}")
 

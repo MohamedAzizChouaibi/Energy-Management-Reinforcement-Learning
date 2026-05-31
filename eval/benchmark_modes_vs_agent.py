@@ -82,7 +82,6 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from env.ths_env import THSEnv
 
-CYCLES = ("WLTC", "FTP75", "US06")
 MODES = ("EV", "ECO", "NORMAL", "PWR")
 ACTION_MAP = {"EV": 0, "ECO": 1, "NORMAL": 2, "PWR": 3}
 CONTENDERS = list(MODES) + ["Agent"]
@@ -112,10 +111,10 @@ COLORS = {
 # Episode runner — fixed-mode replays one action; the agent predicts each step
 # ---------------------------------------------------------------------------
 
-def run_episode(cycle: str, *, model: PPO | None, fixed_action: int | None) -> pd.DataFrame:
-    """Run one full cycle. Pass `model` for the agent or `fixed_action` for a mode."""
+def run_episode(route_cache: str, *, model: PPO | None, fixed_action: int | None) -> pd.DataFrame:
+    """Run one full episode. Pass `model` for the agent or `fixed_action` for a mode."""
     from env.aziz_adapter import predict as aziz_predict
-    env = THSEnv(cycle=cycle)
+    env = THSEnv(route_cache)
     obs, _ = env.reset(seed=0)
     rows, step, done = [], 0, False
     prev = 1
@@ -142,7 +141,7 @@ def run_episode(cycle: str, *, model: PPO | None, fixed_action: int | None) -> p
     return pd.DataFrame(rows)
 
 
-def compute_kpis(df: pd.DataFrame, cycle: str, label: str) -> dict:
+def compute_kpis(df: pd.DataFrame, route: str, label: str) -> dict:
     soc = df["soc_pct"].to_numpy(dtype=np.float64)
     p_batt = df["p_batt_kw"].to_numpy(dtype=np.float64)
     ice_on = df["ice_on"].to_numpy(dtype=bool)
@@ -189,7 +188,7 @@ def compute_kpis(df: pd.DataFrame, cycle: str, label: str) -> dict:
     speed_rmse_kmh = float(np.sqrt(np.mean(speed_err_kmh ** 2)))
 
     return {
-        "cycle":                  cycle,
+        "route":                  route,
         "contender":              label,
         # fuel & emissions
         "total_fuel_g":           round(total_fuel_g, 2),
@@ -233,12 +232,12 @@ def compute_kpis(df: pd.DataFrame, cycle: str, label: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def _grouped_bar(ax, kpis: pd.DataFrame, value_col: str, ylabel: str,
-                 title: str, cycles: list[str]) -> None:
-    x = np.arange(len(cycles))
+                 title: str, routes: list[str]) -> None:
+    x = np.arange(len(routes))
     width = 0.8 / len(CONTENDERS)
     for i, name in enumerate(CONTENDERS):
-        vals = [float(kpis[(kpis["cycle"] == c) & (kpis["contender"] == name)][value_col].iloc[0])
-                for c in cycles]
+        vals = [float(kpis[(kpis["route"] == r) & (kpis["contender"] == name)][value_col].iloc[0])
+                for r in routes]
         offset = (i - (len(CONTENDERS) - 1) / 2) * width
         is_agent = name == "Agent"
         bars = ax.bar(x + offset, vals, width, label=name, color=COLORS[name],
@@ -250,17 +249,17 @@ def _grouped_bar(ax, kpis: pd.DataFrame, value_col: str, ylabel: str,
                     f"{v:.0f}" if abs(v) >= 10 else f"{v:.2f}",
                     ha="center", va="bottom", fontsize=6, rotation=90)
     ax.set_xticks(x)
-    ax.set_xticklabels(cycles)
+    ax.set_xticklabels(routes)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.grid(axis="y", alpha=0.3)
 
 
 def save_single_bar(kpis: pd.DataFrame, value_col: str, ylabel: str,
-                    title: str, cycles: list[str], out: Path) -> Path:
+                    title: str, routes: list[str], out: Path) -> Path:
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(11, 6))
-    _grouped_bar(ax, kpis, value_col, ylabel, title, cycles)
+    _grouped_bar(ax, kpis, value_col, ylabel, title, routes)
     ax.legend(ncol=len(CONTENDERS), fontsize=9)
     plt.tight_layout()
     plt.savefig(out, dpi=200)
@@ -269,12 +268,12 @@ def save_single_bar(kpis: pd.DataFrame, value_col: str, ylabel: str,
 
 
 def save_paired_bars(kpis: pd.DataFrame, specs: list[tuple], suptitle: str,
-                     cycles: list[str], out: Path) -> Path:
+                     routes: list[str], out: Path) -> Path:
     """specs: list of (value_col, ylabel, title)."""
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(1, len(specs), figsize=(13, 5.5))
     for ax, (col, ylabel, title) in zip(np.atleast_1d(axes), specs):
-        _grouped_bar(ax, kpis, col, ylabel, title, cycles)
+        _grouped_bar(ax, kpis, col, ylabel, title, routes)
     axes[0].legend(ncol=len(CONTENDERS), fontsize=8)
     fig.suptitle(suptitle, fontsize=13)
     plt.tight_layout()
@@ -283,32 +282,26 @@ def save_paired_bars(kpis: pd.DataFrame, specs: list[tuple], suptitle: str,
     return out
 
 
-def save_radar(kpis: pd.DataFrame, cycles: list[str], out: Path) -> Path:
-    """Normalised radar: lower is better on every axis, so each metric is
-    min-max scaled per cycle and inverted to a 'goodness' score in [0, 1]."""
+def save_radar(kpis: pd.DataFrame, routes: list[str], out: Path) -> Path:
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-    # (column, label, lower_is_better)
     axes_spec = [
         ("total_fuel_g",    "Fuel",        True),
         ("fuel_g_per_km",   "Fuel/km",     True),
         ("soc_rmse",        "SOC dev",     True),
         ("ice_on_fraction", "ICE use",     True),
-        ("soc_min_pct",     "SOC floor",   False),  # higher SOC min is safer
-        ("regen_kj",        "Regen",       False),  # more recovered is better
+        ("soc_min_pct",     "SOC floor",   False),
+        ("regen_kj",        "Regen",       False),
     ]
     labels = [s[1] for s in axes_spec]
     angles = np.linspace(0, 2 * np.pi, len(labels), endpoint=False).tolist()
     angles += angles[:1]
 
-    n = len(cycles)
-    fig, axes = plt.subplots(1, n, figsize=(5.2 * n, 5.2),
-                             subplot_kw={"polar": True})
+    n = len(routes)
+    fig, axes = plt.subplots(1, n, figsize=(5.2 * n, 5.2), subplot_kw={"polar": True})
     axes = np.atleast_1d(axes)
-    for ax, cycle in zip(axes, cycles):
-        sub = kpis[kpis["cycle"] == cycle]
-        # Per-axis min-max bounds across contenders for this cycle.
-        bounds = {col: (float(sub[col].min()), float(sub[col].max()))
-                  for col, _, _ in axes_spec}
+    for ax, route in zip(axes, routes):
+        sub = kpis[kpis["route"] == route]
+        bounds = {col: (float(sub[col].min()), float(sub[col].max())) for col, _, _ in axes_spec}
         for name in CONTENDERS:
             row = sub[sub["contender"] == name].iloc[0]
             scores = []
@@ -328,30 +321,30 @@ def save_radar(kpis: pd.DataFrame, cycles: list[str], out: Path) -> Path:
         ax.set_xticklabels(labels, fontsize=9)
         ax.set_ylim(0, 1)
         ax.set_yticklabels([])
-        ax.set_title(cycle, fontsize=12, pad=18)
+        ax.set_title(route, fontsize=12, pad=18)
     axes[-1].legend(loc="upper right", bbox_to_anchor=(1.35, 1.1), fontsize=9)
-    fig.suptitle("Normalised performance radar (outer = better, per cycle)", fontsize=13)
+    fig.suptitle("Normalised performance radar (outer = better)", fontsize=13)
     plt.tight_layout()
     plt.savefig(out, dpi=200)
     plt.close()
     return out
 
 
-def save_soc_traces(traces: dict, cycles: list[str], out: Path) -> Path:
+def save_soc_traces(traces: dict, routes: list[str], out: Path) -> Path:
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-    fig, axes = plt.subplots(len(cycles), 1, figsize=(11, 3.0 * len(cycles)))
+    fig, axes = plt.subplots(len(routes), 1, figsize=(11, 3.0 * len(routes)))
     axes = np.atleast_1d(axes)
-    for ax, cycle in zip(axes, cycles):
+    for ax, route in zip(axes, routes):
         for mode in MODES:
-            df = traces[(cycle, mode)]
+            df = traces[(route, mode)]
             ax.plot(df["time_s"], df["soc_pct"], color=COLORS[mode],
                     linewidth=0.9, linestyle="--", alpha=0.7, label=f"Fixed {mode}")
-        agent_df = traces[(cycle, "Agent")]
+        agent_df = traces[(route, "Agent")]
         ax.plot(agent_df["time_s"], agent_df["soc_pct"], color=COLORS["Agent"],
                 linewidth=1.8, label="PPO Agent", zorder=5)
         ax.axhline(SOC_TARGET_PCT, color="gray", linestyle=":", linewidth=0.8, alpha=0.6)
         ax.axhline(40.0, color="red", linestyle=":", linewidth=0.8, alpha=0.4)
-        ax.set_title(cycle)
+        ax.set_title(route)
         ax.set_ylabel("SOC (%)")
         ax.grid(alpha=0.2)
         ax.legend(fontsize=7, ncol=5, loc="upper right")
@@ -363,19 +356,15 @@ def save_soc_traces(traces: dict, cycles: list[str], out: Path) -> Path:
     return out
 
 
-def save_energy_breakdown(kpis: pd.DataFrame, cycles: list[str], out: Path) -> Path:
-    """Grouped bars per cycle: fuel chemical energy beside the net battery
-    electricity drawn from the pack (SOC swing). Electricity dips below zero
-    when a mode ends above the 60% SOC start (banked charge). A black marker
-    shows the actual full energy (fuel + electricity) for each contender."""
+def save_energy_breakdown(kpis: pd.DataFrame, routes: list[str], out: Path) -> Path:
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-    n = len(cycles)
+    n = len(routes)
     fig, axes = plt.subplots(1, n, figsize=(4.6 * n, 5.2), sharey=True)
     axes = np.atleast_1d(axes)
     x = np.arange(len(CONTENDERS))
     width = 0.38
-    for ax, cycle in zip(axes, cycles):
-        sub = kpis[kpis["cycle"] == cycle]
+    for ax, route in zip(axes, routes):
+        sub = kpis[kpis["route"] == route]
         fuel = np.array([float(sub[sub["contender"] == c]["fuel_energy_kwh"].iloc[0]) for c in CONTENDERS])
         elec = np.array([float(sub[sub["contender"] == c]["elec_storage_kwh"].iloc[0]) for c in CONTENDERS])
         ax.bar(x - width / 2, fuel, width, color="#e15759", label="Fuel energy", zorder=2)
@@ -387,11 +376,11 @@ def save_energy_breakdown(kpis: pd.DataFrame, cycles: list[str], out: Path) -> P
         ax.axhline(0, color="black", linewidth=0.6)
         ax.set_xticks(x)
         ax.set_xticklabels(CONTENDERS, fontsize=8)
-        ax.set_title(cycle)
+        ax.set_title(route)
         ax.grid(axis="y", alpha=0.3)
     axes[0].set_ylabel("Energy (kWh)")
     axes[0].legend(fontsize=8)
-    fig.suptitle("Full energy consumption: fuel vs net electricity (actual SOC swing)", fontsize=13)
+    fig.suptitle("Full energy: fuel vs net electricity", fontsize=13)
     plt.tight_layout()
     plt.savefig(out, dpi=200)
     plt.close()
@@ -402,8 +391,7 @@ def save_energy_breakdown(kpis: pd.DataFrame, cycles: list[str], out: Path) -> P
 # Reporting
 # ---------------------------------------------------------------------------
 
-def print_table(kpis: pd.DataFrame, cycles: list[str]) -> None:
-    # (header, fmt(row) -> str). Two blocks keep the lines terminal-friendly.
+def print_table(kpis: pd.DataFrame, routes: list[str]) -> None:
     block_a = [
         ("Fuel(g)",  lambda r: f"{r['total_fuel_g']:>10.1f}"),
         ("g/km",     lambda r: f"{r['fuel_g_per_km']:>9.3f}"),
@@ -422,13 +410,13 @@ def print_table(kpis: pd.DataFrame, cycles: list[str]) -> None:
         ("Regen(kJ)", lambda r: f"{r['regen_kj']:>10.1f}"),
         ("SpdRMSE",   lambda r: f"{r['speed_rmse_kmh']:>9.2f}"),
     ]
-    for cycle in cycles:
-        sub = kpis[kpis["cycle"] == cycle]
+    for route in routes:
+        sub = kpis[kpis["route"] == route]
         best_fuel = sub[sub["contender"] != "Agent"]["total_fuel_g"].min()
         for title, block in (("fuel & emissions", block_a), ("battery / engine / tracking", block_b)):
             header = f"{'CONTENDER':<10}" + "".join(
                 f"{h:>{len(fmt(sub.iloc[0]))}}" for h, fmt in block)
-            print(f"\n  {cycle}  —  {title}")
+            print(f"\n  {route}  —  {title}")
             print("  " + "-" * len(header))
             print("  " + header)
             for name in CONTENDERS:
@@ -446,8 +434,8 @@ def print_table(kpis: pd.DataFrame, cycles: list[str]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--cycles", nargs="+", default=list(CYCLES),
-                        choices=CYCLES, help="Drive cycles to benchmark.")
+    parser.add_argument("--route-cache", nargs="+", required=True,
+                        help="One or more RouteSegment JSON paths to benchmark.")
     parser.add_argument("--model", default="models/aziz_best_model.zip",
                         help="Path to the PPO checkpoint.")
     args = parser.parse_args()
@@ -459,22 +447,23 @@ def main() -> None:
     print(f"Loading PPO model from {model_path} ...")
     model = PPO.load(str(model_path))
 
+    routes = [Path(p).stem for p in args.route_cache]
     rows: list[dict] = []
     traces: dict[tuple, pd.DataFrame] = {}
-    for cycle in args.cycles:
-        print(f"\n--- {cycle} ---")
+    for route_path, route in zip(args.route_cache, routes):
+        print(f"\n--- {route} ---")
         for mode in MODES:
-            df = run_episode(cycle, model=None, fixed_action=ACTION_MAP[mode])
-            traces[(cycle, mode)] = df
-            kpi = compute_kpis(df, cycle, mode)
+            df = run_episode(route_path, model=None, fixed_action=ACTION_MAP[mode])
+            traces[(route, mode)] = df
+            kpi = compute_kpis(df, route, mode)
             rows.append(kpi)
             print(f"  Fixed {mode:<6} fuel={kpi['total_fuel_g']:8.1f} g "
                   f"({kpi['fuel_g_per_km']:6.2f} g/km)  SOC_f={kpi['soc_final_pct']:5.1f}%  "
                   f"ICE={kpi['ice_on_fraction']*100:4.0f}%")
 
-        df = run_episode(cycle, model=model, fixed_action=None)
-        traces[(cycle, "Agent")] = df
-        kpi = compute_kpis(df, cycle, "Agent")
+        df = run_episode(route_path, model=model, fixed_action=None)
+        traces[(route, "Agent")] = df
+        kpi = compute_kpis(df, route, "Agent")
         rows.append(kpi)
         print(f"  PPO Agent    fuel={kpi['total_fuel_g']:8.1f} g "
               f"({kpi['fuel_g_per_km']:6.2f} g/km)  SOC_f={kpi['soc_final_pct']:5.1f}%  "
@@ -482,49 +471,49 @@ def main() -> None:
 
     kpis = pd.DataFrame(rows)
     kpis.to_csv(KPI_CSV, index=False)
-    print_table(kpis, args.cycles)
+    print_table(kpis, routes)
     print(f"\nKPIs -> {KPI_CSV}")
 
     figs = [
         save_single_bar(kpis, "total_fuel_g", "Total fuel (g)",
                         "Fuel Consumption: Fixed Modes vs PPO Agent",
-                        args.cycles, FIGURE_DIR / "bench_fuel_total.png"),
+                        routes, FIGURE_DIR / "bench_fuel_total.png"),
         save_single_bar(kpis, "fuel_g_per_km", "Fuel economy (g/km)",
                         "Fuel Economy: Fixed Modes vs PPO Agent",
-                        args.cycles, FIGURE_DIR / "bench_fuel_per_km.png"),
+                        routes, FIGURE_DIR / "bench_fuel_per_km.png"),
         save_paired_bars(kpis,
                          [("fuel_l_per_100km", "Fuel (L/100km)", "Volumetric economy"),
                           ("co2_g", "CO2 (g)", "Tailpipe CO2")],
                          "Economy & Emissions: Fixed Modes vs PPO Agent",
-                         args.cycles, FIGURE_DIR / "bench_economy_co2.png"),
+                         routes, FIGURE_DIR / "bench_economy_co2.png"),
         save_paired_bars(kpis,
                          [("total_energy_corrected_kwh", "Total energy (kWh)", "Full energy, SOC-corrected"),
                           ("energy_corr_wh_per_km", "Energy (Wh/km)", "Full energy per km, SOC-corrected")],
                          "Full Energy Consumption (SOC-corrected): Fixed Modes vs PPO Agent",
-                         args.cycles, FIGURE_DIR / "bench_full_energy.png"),
-        save_energy_breakdown(kpis, args.cycles, FIGURE_DIR / "bench_energy_breakdown.png"),
+                         routes, FIGURE_DIR / "bench_full_energy.png"),
+        save_energy_breakdown(kpis, routes, FIGURE_DIR / "bench_energy_breakdown.png"),
         save_paired_bars(kpis,
                          [("soc_final_pct", "Final SOC (%)", "Charge-sustaining (target 60%)"),
                           ("soc_rmse", "SOC RMSE (%)", "SOC deviation from target")],
                          "SOC Behaviour: Fixed Modes vs PPO Agent",
-                         args.cycles, FIGURE_DIR / "bench_soc_behaviour.png"),
+                         routes, FIGURE_DIR / "bench_soc_behaviour.png"),
         save_paired_bars(kpis,
                          [("batt_discharge_kwh", "Discharge (kWh)", "Energy drawn from pack"),
                           ("batt_temp_max_c", "Peak temp (C)", "Battery thermal load")],
                          "Battery: Fixed Modes vs PPO Agent",
-                         args.cycles, FIGURE_DIR / "bench_battery.png"),
+                         routes, FIGURE_DIR / "bench_battery.png"),
         save_paired_bars(kpis,
                          [("ice_on_fraction", "ICE-on fraction", "Engine usage"),
                           ("regen_kj", "Regen energy (kJ)", "Engine-off regen recovered")],
                          "Engine Use & Regen: Fixed Modes vs PPO Agent",
-                         args.cycles, FIGURE_DIR / "bench_ice_regen.png"),
+                         routes, FIGURE_DIR / "bench_ice_regen.png"),
         save_paired_bars(kpis,
                          [("ice_starts", "Engine starts", "Start events (wear/drivability)"),
-                          ("speed_rmse_kmh", "Speed RMSE (km/h)", "Cycle-tracking error")],
+                          ("speed_rmse_kmh", "Speed RMSE (km/h)", "Route-tracking error")],
                          "Engine Starts & Speed Tracking: Fixed Modes vs PPO Agent",
-                         args.cycles, FIGURE_DIR / "bench_engine_tracking.png"),
-        save_radar(kpis, args.cycles, FIGURE_DIR / "bench_radar.png"),
-        save_soc_traces(traces, args.cycles, FIGURE_DIR / "bench_soc_traces.png"),
+                         routes, FIGURE_DIR / "bench_engine_tracking.png"),
+        save_radar(kpis, routes, FIGURE_DIR / "bench_radar.png"),
+        save_soc_traces(traces, routes, FIGURE_DIR / "bench_soc_traces.png"),
     ]
     print("\nFigures:")
     for f in figs:

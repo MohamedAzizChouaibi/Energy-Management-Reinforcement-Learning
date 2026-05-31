@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -28,10 +29,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from env.ths_env import THSEnv
-from training.baseline_rule import rule_action
+from eval.aziz_eval_env import (
+    THSIIDrivingModeEnv, ToyotaRuleBasedAgent,
+    _generate_fallback_dataset, EvalConfig,
+)
 
-CYCLES = ("WLTC", "FTP75", "US06")
+# aziz env has 3 actions: 0=EV, 1=ECO, 2=PWR — remap to 4-mode display space
+_AZIZ_TO_DISPLAY = {0: 0, 1: 1, 2: 3}   # EV→0, ECO→1, PWR→3 (skip NORMAL)
+
 MODES = ("EV", "ECO", "NORMAL", "PWR")
 ACTION_MAP = {"EV": 0, "ECO": 1, "NORMAL": 2, "PWR": 3}
 MODE_COLORS = {
@@ -118,6 +123,28 @@ def load_model(model_path: str):
     return PPO.load(str(p), device="cpu")
 
 
+@st.cache_resource(show_spinner=False)
+def _load_eval_dataset():
+    """Load or generate the tabular trip dataset, scaled to the model's 40-feature space."""
+    from env.aziz_adapter import AZIZ_FEATURE_NAMES, AZIZ_SCALER_MEAN, AZIZ_SCALER_SCALE
+    cfg = EvalConfig()
+    parquet = Path(cfg.dataset_parquet)
+    npz_p   = Path(cfg.dataset_npz)
+    if parquet.exists() and npz_p.exists():
+        df  = pd.read_parquet(parquet)
+        npz = np.load(npz_p, allow_pickle=True)
+        X   = npz["X"].astype(np.float32)
+        # Re-select the 40 model features if stored X has more columns
+        if X.shape[1] != len(AZIZ_FEATURE_NAMES) and len(AZIZ_FEATURE_NAMES) > 0:
+            raw = df[[f for f in AZIZ_FEATURE_NAMES if f in df.columns]].values.astype(np.float32)
+            X   = (raw - AZIZ_SCALER_MEAN) / (AZIZ_SCALER_SCALE + 1e-8)
+    else:
+        df = _generate_fallback_dataset(n=15_000)
+        raw = df[[f for f in AZIZ_FEATURE_NAMES if f in df.columns]].values.astype(np.float32)
+        X   = (raw - AZIZ_SCALER_MEAN) / (AZIZ_SCALER_SCALE + 1e-8)
+    return df, X
+
+
 @st.cache_data(show_spinner=False)
 def load_sil_kpis() -> pd.DataFrame | None:
     if SIL_KPIS.exists():
@@ -189,45 +216,193 @@ def _segment_type(speed_kmh: float) -> int:
     return 2
 
 
-def run_episode(cycle: str, strategy: str, route_cache: Path | None, model) -> pd.DataFrame:
-    env = THSEnv(cycle=cycle, route_cache=route_cache)
-    obs, _ = env.reset(seed=0)
+def _gps_rule_policy(obs, info, env):
+    """Deterministic 4-action EMS rule for THSEnv (GPS route episodes).
+
+    Mirrors Toyota Prius Gen-3 logic:
+      EV     – city crawl (< 50 km/h) with adequate SOC
+      ECO    – city / suburban cruise (50–100 km/h)
+      NORMAL – normal highway (100–130 km/h)
+      PWR    – high-speed autobahn or steep climb
+    """
+    soc = float(env.ems.state.soc) if env.ems is not None else 0.60
+    # Use the route target speed, not the actual tracked vehicle speed.
+    # env.speed starts at 0 and lags the profile during acceleration, which
+    # would incorrectly force EV mode for many timesteps on every segment.
+    if len(env.profile) > 0:
+        speed_kmh = float(env.profile[min(env.idx, len(env.profile) - 1)]) * 3.6
+    else:
+        speed_kmh = float(env.speed) * 3.6
+    if speed_kmh < 50.0 and soc >= 0.55:
+        return 0  # EV
+    if speed_kmh < 100.0:
+        return 1  # ECO
+    if speed_kmh < 130.0:
+        return 2  # NORMAL
+    return 3  # PWR
+
+
+def run_episode_route(
+    strategy: str,
+    model,
+    route_path: Path,
+    *,
+    seed: int = 0,
+    on_step=None,
+) -> pd.DataFrame:
+    """Run one episode on a GPS route cache using THSEnv (4-action space).
+
+    on_step(idx, total) is called periodically so callers can display progress.
+    """
+    from env.ths_env import THSEnv
+    from env.aziz_adapter import AzizPolicy
+
+    # dt=1.0 (1 Hz) instead of the 0.1 s default: drive-mode decisions don't need
+    # 10 Hz resolution, and this cuts the step count ~10x for inter-city routes.
+    env  = THSEnv(route_path, dt=1.0)
+    obs, _ = env.reset(seed=seed)
+
+    if strategy == "RL PPO":
+        policy_fn = AzizPolicy(model)
+    else:
+        policy_fn = _gps_rule_policy
+
     rows: list[dict] = []
-    done = False
-    aziz_mode = strategy == "RL PPO" and model is not None and is_aziz_model(model)
-    prev_aziz_action = 1  # default ECO
+    done  = False
+    info: dict = {}
+    total_steps = len(env.profile)
+    total_segs  = len(env.route_segments)
+    seg_to_idx  = {id(s): i for i, s in enumerate(env.route_segments)}
+    current_seg_idx = 0
+    # Update every ~1 % of total steps (minimum every 100 steps).
+    update_every = max(100, total_steps // 100)
+    last_notified = 0
+
     while not done:
-        if strategy == "RL PPO":
-            if aziz_mode:
-                aziz_obs = _build_aziz_obs_fn(env, prev_aziz_action)
-                aziz_action = int(model.predict(aziz_obs, deterministic=True)[0])
-                action = AZIZ_ACTION_TO_THSENV[aziz_action]
-                prev_aziz_action = aziz_action
-            else:
-                action = int(model.predict(obs, deterministic=True)[0])
-        else:  # Rule-based
-            soc    = float(env.ems.state.soc) if env.ems is not None else 0.60
-            action = rule_action(float(env.speed), soc)
+        action = int(policy_fn(obs, info, env))
         obs, reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
-        speed_kmh = float(info["target_speed_ms"]) * 3.6
+        seg = info.get("route_segment")
+        if seg is not None:
+            current_seg_idx = seg_to_idx.get(id(seg), current_seg_idx)
+        speed_kmh = float(info.get("target_speed_ms", 0.0)) * 3.6
         rows.append({
             "time_s":       (env.idx - 1) * env.dt,
             "speed_kmh":    speed_kmh,
             "segment":      _segment_type(speed_kmh),
             "action":       action,
-            "mode":         MODES[action],
-            "ems_submode":  str(info["drive_mode"]),
-            "soc_pct":      float(info["soc_pct"]),
-            "fuel_rate_gs": float(info["fuel_rate_gs"]),
+            "mode":         MODES[action] if action < len(MODES) else "NORMAL",
+            "ems_submode":  str(info.get("drive_mode", MODES[action] if action < len(MODES) else "NORMAL")),
+            "soc_pct":      float(info.get("soc_pct", 60.0)),
+            "fuel_rate_gs": float(info.get("fuel_rate_gs", 0.0)),
             "p_batt_kw":    float(info.get("p_batt_kw", 0.0)),
-            "i_batt_a":     float(info.get("i_batt_a", 0.0)),
+            "i_batt_a":     0.0,
             "reward":       float(reward),
             "dt":           float(env.dt),
         })
-    df = pd.DataFrame(rows)
-    df["fuel_cumulative_g"] = (df["fuel_rate_gs"] * df["dt"]).cumsum()
-    return df
+        if on_step is not None and (env.idx - last_notified) >= update_every:
+            on_step(current_seg_idx + 1, total_segs)
+            last_notified = env.idx
+
+    if on_step is not None:
+        on_step(total_segs, total_segs)
+
+    result = pd.DataFrame(rows)
+    result["fuel_cumulative_g"] = (result["fuel_rate_gs"] * result["dt"]).cumsum()
+    return result
+
+
+def build_comparison_route(
+    model,
+    route_path: Path,
+    seed: int = 0,
+    on_progress=None,
+) -> dict[str, pd.DataFrame]:
+    """Run both agents on the same GPS route.
+
+    on_progress(strategy, overall_frac, step, total) is forwarded from run_episode_route.
+    """
+    runs: dict[str, pd.DataFrame] = {}
+    active = [s for s in COMPARE_STRATEGIES if not (s == "RL PPO" and model is None)]
+    n = len(active)
+    for i, strategy in enumerate(active):
+        offset = i / n
+
+        def _cb(idx, total, _offset=offset, _n=n, _s=strategy):
+            if on_progress is not None:
+                on_progress(_s, _offset + (idx / max(total, 1)) / _n, idx, total)
+
+        runs[strategy] = run_episode_route(strategy, model, route_path, seed=seed, on_step=_cb)
+    return runs
+
+
+def run_episode(strategy: str, model, df_trips: pd.DataFrame, X: np.ndarray,
+                trip_id: int | None = None, seed: int = 0) -> pd.DataFrame:
+    """Run one episode in the aziz training environment (segment-based, tabular)."""
+    cfg  = EvalConfig()
+    env  = THSIIDrivingModeEnv(df=df_trips, X=X, cfg=cfg, seed=seed)
+    rule = ToyotaRuleBasedAgent(cfg=cfg)
+
+    if trip_id is not None and hasattr(env, "reset_to_trip"):
+        obs, _ = env.reset_to_trip(trip_id)
+    else:
+        obs, _ = env.reset()
+
+    done  = False
+    rows: list[dict] = []
+    cumulative_time_s = 0.0
+
+    while not done:
+        step_idx = min(env._step_idx, len(env._trip_rows) - 1)
+        row_idx  = env._trip_rows[step_idx]
+        row      = df_trips.loc[row_idx]
+
+        if strategy == "RL PPO":
+            aziz_action = int(model.predict(obs, deterministic=True)[0])
+        else:
+            aziz_action, _ = rule.predict(obs, row=row, current_soc=env._ep_soc)
+
+        obs, reward, terminated, truncated, info = env.step(aziz_action)
+        done = terminated or truncated
+
+        # remap 3-action → 4-mode display (skip NORMAL: EV=0, ECO=1, PWR→3)
+        display_action = _AZIZ_TO_DISPLAY[aziz_action]
+        speed_kmh = float(row.get("seg_avg_speed_kmh", 50.0))
+        speed_ms  = max(speed_kmh / 3.6, 0.1)
+        seg_len_m = float(row.get("seg_length_m", 300.0))
+        seg_dt    = seg_len_m / speed_ms          # segment duration in seconds
+        cumulative_time_s += seg_dt
+
+        # fuel in grams (L → g via gasoline density)
+        fuel_g     = env._fuel_per_step[-1] * GASOLINE_DENSITY_G_PER_L
+        fuel_rate  = fuel_g / seg_dt if seg_dt > 0 else 0.0
+        soc_pct    = env._soc_history[-1] * 100.0
+
+        # battery power estimate from SOC delta
+        if len(env._soc_history) >= 2:
+            soc_delta = env._soc_history[-1] - env._soc_history[-2]
+            p_batt_kw = -(soc_delta * BATT_NOMINAL_KWH * 1000.0) / (seg_dt / 3600.0) if seg_dt > 0 else 0.0
+        else:
+            p_batt_kw = 0.0
+
+        rows.append({
+            "time_s":       cumulative_time_s,
+            "speed_kmh":    speed_kmh,
+            "segment":      _segment_type(speed_kmh),
+            "action":       display_action,
+            "mode":         MODES[display_action],
+            "ems_submode":  ["EV", "ECO", "PWR"][aziz_action],
+            "soc_pct":      soc_pct,
+            "fuel_rate_gs": fuel_rate,
+            "p_batt_kw":    p_batt_kw,
+            "i_batt_a":     0.0,
+            "reward":       float(reward),
+            "dt":           seg_dt,
+        })
+
+    result = pd.DataFrame(rows)
+    result["fuel_cumulative_g"] = (result["fuel_rate_gs"] * result["dt"]).cumsum()
+    return result
 
 
 def energy_metrics(df: pd.DataFrame) -> dict:
@@ -268,12 +443,14 @@ def episode_metrics(df: pd.DataFrame) -> dict:
     return em
 
 
-def build_comparison(cycle: str, route_cache: Path | None, model) -> dict[str, pd.DataFrame]:
+def build_comparison(model, df_trips: pd.DataFrame, X: np.ndarray,
+                     seed: int = 0) -> dict[str, pd.DataFrame]:
+    """Run both agents on the same randomly-chosen trip (same seed → same trip)."""
     runs: dict[str, pd.DataFrame] = {}
     for strategy in COMPARE_STRATEGIES:
         if strategy == "RL PPO" and model is None:
             continue
-        runs[strategy] = run_episode(cycle, strategy, route_cache, model)
+        runs[strategy] = run_episode(strategy, model, df_trips, X, seed=seed)
     return runs
 
 
@@ -620,8 +797,6 @@ def main() -> None:
             chosen_path = str(MODEL_PATH)
         st.markdown("---")
 
-        cycle = st.selectbox("Drive cycle", CYCLES, index=0)
-        st.markdown("---")
         st.markdown("### 🗺 Route (TomTom)")
         has_key = _tomtom_key() is not None
         if not has_key:
@@ -688,25 +863,73 @@ def main() -> None:
         route_payload = json.loads(DEFAULT_ROUTE.read_text())
         route_path    = DEFAULT_ROUTE
 
-    # run
+    # load model + dataset (cached)
     model = load_model(chosen_path)
+    df_trips, X_trips = _load_eval_dataset()
 
     if run:
         if model is None:
             st.error("No trained model available — cannot run PPO.")
         else:
             try:
-                with st.spinner(f"Running PPO + Rule-based on {cycle} …"):
-                    runs = build_comparison(cycle, route_path, model)
-                st.session_state["runs"]  = runs
-                st.session_state["meta"]  = {"cycle": cycle, "has_route": route_path is not None}
-                st.sidebar.success(f"✅ Episode done — {cycle}")
+                episode_seed = st.session_state.get("episode_seed", 0) + 1
+                st.session_state["episode_seed"] = episode_seed
+
+                if route_path is not None:
+                    # Run on the user-selected GPS route (THSEnv, 4-action space)
+                    _prog    = st.progress(0.0, text="Starting …")
+                    _eta_box = st.empty()
+                    _t0      = time.time()
+
+                    def _on_progress(strategy, overall_frac, idx, total):
+                        elapsed = time.time() - _t0
+                        pct     = min(float(overall_frac), 1.0)
+                        if pct > 0.01:
+                            remaining = elapsed / pct * (1.0 - pct)
+                            mins, secs = divmod(int(remaining), 60)
+                            eta_str = f"{mins}m {secs:02d}s" if mins else f"{secs}s"
+                            _eta_box.caption(
+                                f"**{strategy}** · segment {idx:,} / {total:,} "
+                                f"({pct * 100:.0f}%) · "
+                                f"{elapsed:.0f}s elapsed · **~{eta_str} remaining**"
+                            )
+                        else:
+                            _eta_box.caption(f"**{strategy}** · segment {idx:,} / {total:,} …")
+                        _prog.progress(pct, text=f"{strategy} — {pct * 100:.0f}%")
+
+                    runs = build_comparison_route(
+                        model, route_path, seed=episode_seed, on_progress=_on_progress
+                    )
+                    _prog.empty()
+                    _eta_box.empty()
+                    if route_payload is not None:
+                        origin = (route_payload.get("origin") or {}).get("address", "")
+                        dest   = (route_payload.get("destination") or {}).get("address", "")
+                        route_label = f"{origin} → {dest}" if origin and dest else route_path.stem
+                    else:
+                        route_label = route_path.stem.replace("_segments", "").replace("_", " → ", 1)
+                    st.session_state["runs"] = runs
+                    st.session_state["meta"] = {"route": route_label}
+                    st.sidebar.success(f"✅ Episode {episode_seed} — {route_label}")
+                else:
+                    # Fallback: run on a random tabular trip
+                    with st.spinner("Running PPO + Rule-based episode …"):
+                        runs = build_comparison(model, df_trips, X_trips, seed=episode_seed)
+                    cfg = EvalConfig()
+                    env_tmp = THSIIDrivingModeEnv(df=df_trips, X=X_trips, cfg=cfg, seed=episode_seed)
+                    env_tmp.reset()
+                    trip_row = df_trips.loc[env_tmp._trip_rows[0]]
+                    scenario = str(trip_row.get("scenario", "trip"))
+                    st.session_state["runs"] = runs
+                    st.session_state["meta"] = {"route": f"{scenario} (trip #{episode_seed})"}
+                    st.sidebar.success(f"✅ Episode {episode_seed} — {scenario}")
             except Exception as exc:
-                st.error(f"Episode run failed: {exc}")
+                import traceback
+                st.error(f"Episode run failed: {exc}\n\n```\n{traceback.format_exc()}\n```")
 
     # ── nothing to display yet ────────────────────────────────────────────────
     if "runs" not in st.session_state:
-        st.info("Select a drive cycle in the sidebar and click **▶ Run Episode** to start.")
+        st.info("Click **▶ Run Episode** to start.")
         return
 
     runs:  dict[str, pd.DataFrame] = st.session_state["runs"]
@@ -717,12 +940,10 @@ def main() -> None:
     rule_m = episode_metrics(runs["Rule-based"]) if "Rule-based" in runs else {}
 
     # ── current run banner ────────────────────────────────────────────────────
-    route_badge = "with GPS route" if meta.get("has_route") else "no GPS route"
     st.markdown(
         f'<div style="background:#e0f2fe;border-left:4px solid #0284c7;border-radius:6px;'
         f'padding:8px 14px;margin-bottom:12px;color:#0c4a6e;font-weight:600">'
-        f'📍 Showing results for: <span style="color:#0369a1">{meta["cycle"]}</span> '
-        f'&nbsp;·&nbsp; {route_badge}'
+        f'📍 Showing results for: <span style="color:#0369a1">{meta.get("route", "route")}</span>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -787,7 +1008,7 @@ def main() -> None:
     st.caption(
         "Background bands show which drive mode (EV / ECO / NORMAL / PWR) each controller selected at each instant. "
         "The Rule-based agent follows a deterministic speed threshold, whereas PPO adapts dynamically to the SOC and "
-        "the full drive-cycle context."
+        "the full GPS route context."
     )
     if "RL PPO" in runs and "Rule-based" in runs:
         st.plotly_chart(
@@ -851,11 +1072,11 @@ def main() -> None:
         st.markdown("""
 | Speed condition | SOC condition | Selected mode |
 |---|---|---|
-| < 5 km/h | SOC ≥ 45 % | **EV** |
-| < 5 km/h | SOC < 45 % | **ECO** |
-| 5 – 15 km/h | — | **ECO** |
-| 15 – 80 km/h | — | **NORMAL** |
-| ≥ 80 km/h | — | **PWR** |
+| < 50 km/h | SOC ≥ 55 % | **EV** |
+| < 50 km/h | SOC < 55 % | **ECO** |
+| 50 – 100 km/h | — | **ECO** |
+| 100 – 130 km/h | — | **NORMAL** |
+| ≥ 130 km/h | — | **PWR** |
 
 On the map the polyline colour shows the **recommended mode per segment**:
 <span style="color:#4e79a7">■ EV</span> (urban, &lt;15 km/h) ·

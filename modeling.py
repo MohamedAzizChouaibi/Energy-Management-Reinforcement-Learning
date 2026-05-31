@@ -22,11 +22,6 @@ Usage
   # Standalone powertrain test (default synthetic cycle):
   python modeling1.py --standalone [--plot]
 
-  # Standard drive cycles (PI speed-tracking at 1 Hz):
-  python modeling1.py --standalone --cycle WLTC [--plot]
-  python modeling1.py --standalone --cycle FTP75 [--plot]
-  python modeling1.py --standalone --cycle US06 [--plot]
-
   # Override initial drive mode:
   python modeling1.py --standalone --drive-mode ECO [--plot]
 
@@ -331,190 +326,6 @@ def ool_lookup(p_ice_w: float):
     p   = float(np.clip(p_ice_w, 0, ICE_PEAK_POWER_W))
     idx = min(max(int(round(p / 1000)) * 1000, _OOL_P_KEYS[0]), _OOL_P_KEYS[-1])
     return _OOL_TABLE[idx]
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-#  FTP-75 UDDS DRIVE CYCLE
-# ──────────────────────────────────────────────────────────────────────────────
-
-def _build_ftp75() -> np.ndarray:
-    """
-    Reconstruct the FTP-75 drive cycle from representative waypoints.
-
-    Returns a **2474-element** NumPy array (speed in m/s at 1 s resolution)
-    that matches the project specification of 2474 timesteps.
-
-    Structure mirrors the standard FTP-75 three-phase procedure:
-      Phase 1 — Cold-start UDDS  :   0 –  504 s
-      Phase 2 — Transient UDDS   : 505 – 1369 s
-      Soak idle                  : 1370 – 1569 s  (engine off, 0 m/s)
-      Phase 3 — Hot-start UDDS   : 1570 – 2473 s  (UDDS sub-cycle repeat)
-
-    All speeds are in mph at the waypoint, converted to m/s on return.
-
-    NOTE: if ``env/drive_cycles/FTP75.csv`` exists (column ``speed_ms``,
-    ≥ 2474 rows), it is loaded in preference to this synthetic profile.
-    The CSV path is checked at import time via :func:`_load_ftp75_csv`.
-    """
-    # ── Phase 1: cold-start UDDS (0–504 s) ───────────────────────────
-    ph1 = [
-        (0,0),(3,0),(13,15),(18,15),(25,0),(28,0),(38,24),(46,24),
-        (55,0),(60,0),(67,13),(71,20),(79,20),(83,0),(90,0),(99,22),
-        (107,22),(112,0),(118,0),(128,28),(134,28),(148,0),(155,0),
-        (165,35),(177,35),(184,0),(189,0),(202,20),(213,20),(220,0),
-        (226,0),(236,12),(241,20),(255,20),(260,0),(265,0),(275,18),
-        (283,18),(288,0),(295,0),(305,22),(315,22),(320,0),(325,0),
-        (335,15),(340,20),(350,25),(360,25),(366,0),(370,0),(377,20),
-        (385,20),(390,0),(395,0),(405,30),(415,30),(422,0),(430,0),
-        (440,20),(448,20),(453,0),(460,0),(468,25),(475,25),(480,0),
-        (487,0),(495,28),(502,28),(504,0),
-    ]
-    # ── Phase 2: transient UDDS sub-segments (505–1369 s) ────────────
-    # Representative suburban+highway segments bridging the two UDDS runs.
-    ph2_base = 504
-    ph2 = [
-        (0,0),(5,0),(15,22),(25,35),(40,35),(48,0),(55,0),
-        (65,28),(75,40),(90,40),(98,0),(105,0),(112,20),(120,30),
-        (135,30),(145,0),(152,0),(160,25),(172,42),(185,42),(195,0),
-        (202,0),(210,18),(218,28),(228,35),(240,35),(250,0),(258,0),
-        (268,30),(280,45),(295,45),(305,0),(315,0),(325,22),(338,30),
-        (350,30),(360,0),(368,0),(375,20),(385,35),(398,35),(410,0),
-        (418,0),(428,25),(440,38),(455,38),(465,0),(475,0),(485,28),
-        (495,35),(510,35),(520,0),(530,0),(540,22),(550,30),(565,30),
-        (575,0),(582,0),(590,18),(598,28),(608,28),(618,0),(625,0),
-        (635,25),(645,40),(658,40),(668,0),(678,0),(688,30),(700,42),
-        (715,42),(727,0),(735,0),(745,22),(755,35),(768,35),(780,0),
-        (790,0),(800,18),(808,28),(820,35),(835,35),(845,0),(855,0),
-        (864,0),
-    ]
-    ph2_t = np.array([p[0] for p in ph2]) + ph2_base
-    ph2_s = np.array([p[1] for p in ph2])
-
-    # ── Phase 3: hot-start UDDS (1570–2473 s) — shortened UDDS repeat ─
-    ph3_base = 1570
-    # Reuse Phase-1 waypoints, scaled to 903 s (t_max → 903)
-    ph1_t_raw = np.array([p[0] for p in ph1], dtype=float)
-    ph1_s_raw = np.array([p[1] for p in ph1], dtype=float)
-    ph3_scale = 903.0 / ph1_t_raw[-1]
-    ph3_t = ph1_t_raw * ph3_scale + ph3_base
-    ph3_s = ph1_s_raw   # same speed targets
-
-    # ── Assemble master waypoint arrays ───────────────────────────────
-    all_t = np.concatenate([
-        np.array([p[0] for p in ph1]),       # 0–504
-        ph2_t,                                # 505–1368
-        np.array([1369, 1370, 1569]),         # bridge + soak start
-        ph3_t,                                # 1570–2473
-        np.array([2473.0]),
-    ])
-    all_s = np.concatenate([
-        np.array([p[1] for p in ph1]),
-        ph2_s,
-        np.array([0.0, 0.0, 0.0]),           # idle during soak
-        ph3_s,
-        np.array([0.0]),
-    ])
-
-    t_query = np.arange(0, 2474, dtype=float)
-    speed_mph = np.interp(t_query, all_t, all_s)
-    return speed_mph * 0.44704   # mph → m/s
-
-
-def _load_ftp75_csv() -> np.ndarray:
-    """
-    Try to load FTP-75 from ``env/drive_cycles/FTP75.csv`` (column
-    ``speed_ms``, ≥ 2474 rows).  Returns ``None`` on any failure so the
-    caller can fall back to the synthesised profile.
-    """
-    import os
-    csv_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        'env', 'drive_cycles', 'FTP75.csv')
-    if not os.path.isfile(csv_path):
-        return None
-    try:
-        data = np.genfromtxt(csv_path, delimiter=',', names=True)
-        arr  = data['speed_ms'].astype(np.float64)
-        if len(arr) < 2474:
-            print(f'[THS-II] FTP75.csv has only {len(arr)} rows (need ≥ 2474) '
-                  f'— falling back to synthetic profile.')
-            return None
-        return arr[:2474]
-    except Exception as exc:
-        print(f'[THS-II] Could not load FTP75.csv ({exc}) '
-              f'— falling back to synthetic profile.')
-        return None
-
-
-# Prefer external CSV; fall back only if the local project data file is absent.
-FTP75_PROFILE = _load_ftp75_csv()
-if FTP75_PROFILE is None:
-    FTP75_PROFILE = _build_ftp75()
-assert len(FTP75_PROFILE) == 2474, (
-    f"FTP75_PROFILE must have exactly 2474 elements, got {len(FTP75_PROFILE)}"
-)
-
-
-DRIVE_CYCLE_SPECS = {
-    'WLTC':    dict(filename='WLTC.csv',    expected_len=1800),
-    'FTP75':   dict(filename='FTP75.csv',   expected_len=2474),
-    'US06':    dict(filename='US06.csv',    expected_len=596),
-    # GENERAL: synthetic all-regime cycle (urban / congestion / rural /
-    # mountain ±8% / motorway / motorway-traffic). Built by
-    # env/drive_cycles/build_general_cycle.py; carries a road_grade_rad column.
-    'GENERAL': dict(filename='GENERAL.csv', expected_len=1327),
-}
-
-
-def _drive_cycle_dir() -> str:
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        'env', 'drive_cycles')
-
-
-def available_drive_cycles():
-    """Return supported standard cycle names for CLI/env integration."""
-    return tuple(DRIVE_CYCLE_SPECS.keys())
-
-
-def load_drive_cycle(cycle_name: str) -> np.ndarray:
-    """
-    Load a standard 1 Hz drive cycle from env/drive_cycles/<cycle>.csv.
-
-    The CSV must contain one column named ``speed_ms``. Exact row counts are
-    enforced because the RL pipeline uses them as episode lengths:
-    WLTC=1800, FTP75=2474, US06=596.
-    """
-    name = cycle_name.upper().replace('-', '')
-    if name == 'FTP':
-        name = 'FTP75'
-    if name not in DRIVE_CYCLE_SPECS:
-        raise ValueError(f"Unsupported drive cycle '{cycle_name}'. "
-                         f"Choose: {', '.join(available_drive_cycles())}")
-
-    spec = DRIVE_CYCLE_SPECS[name]
-    path = os.path.join(_drive_cycle_dir(), spec['filename'])
-    if not os.path.isfile(path):
-        raise FileNotFoundError(
-            f"Missing {path}. Create env/drive_cycles/{spec['filename']} "
-            f"with a speed_ms column before running the {name} cycle.")
-
-    try:
-        data = np.genfromtxt(path, delimiter=',', names=True, dtype=np.float64)
-        arr = np.asarray(data['speed_ms'], dtype=np.float64)
-    except Exception as exc:
-        raise ValueError(f"Could not read speed_ms from {path}: {exc}") from exc
-
-    if arr.ndim == 0:
-        arr = np.array([float(arr)], dtype=np.float64)
-    expected = spec['expected_len']
-    if len(arr) != expected:
-        raise ValueError(f"{spec['filename']} must have exactly {expected} rows; "
-                         f"got {len(arr)}")
-    if not np.all(np.isfinite(arr)):
-        raise ValueError(f"{spec['filename']} contains NaN or infinite speeds")
-    if np.any(arr < -1e-9):
-        raise ValueError(f"{spec['filename']} contains negative speeds")
-    return np.maximum(arr, 0.0)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1150,7 +961,7 @@ class StandaloneSimulation:
     This class replaces the original CarlaTHSIISimulation.  It provides
     identical functionality for the --standalone use case:
 
-      • FTP-75 / synthetic drive cycle with PI speed-tracking
+      • Synthetic drive cycle with PI speed-tracking
       • Vehicle dynamics integrator (same equations as original)
       • CSV KPI logging to ``csv_path``
       • Optional matplotlib plot saved to /tmp/
@@ -1164,43 +975,16 @@ class StandaloneSimulation:
     """
 
     def __init__(self,
-                 use_ftp75: bool = False,
                  plot: bool = False,
                  init_drive_mode: DriveMode = DriveMode.AUTOMATIC,
-                 cycle_name: str = 'synthetic',
                  csv_path: str = 'ths2_kpis.csv'):
-        if use_ftp75:
-            cycle_name = 'FTP75'
-        self.cycle_name      = cycle_name.upper().replace('-', '')
-        if self.cycle_name == 'SYNTHETIC':
-            self.profile = None
-        else:
-            self.profile = load_drive_cycle(self.cycle_name)
-        self.use_ftp75       = (self.cycle_name == 'FTP75')
-        self.plot            = plot
-        self.csv_path        = csv_path
-
-        self.ems     = THSIIController(init_drive_mode=init_drive_mode)
-        self.pi_ctrl = SpeedTrackingPI() if self.profile is not None else None
+        self.plot     = plot
+        self.csv_path = csv_path
+        self.ems      = THSIIController(init_drive_mode=init_drive_mode)
 
     # ------------------------------------------------------------------
-    def _driver_inputs(self, t: float, speed_ms: float, step_idx: int = 0):
-        """
-        Return (throttle, brake, v_ref_or_None) for the current timestep.
-
-        FTP-75 mode uses the PI controller tracking the pre-built profile.
-        ``step_idx`` is used instead of ``int(t)`` so the method is correct
-        for any outer-loop dt (including dt=1.0 and dt=0.05).
-
-        Synthetic mode uses a fixed schedule that exercises all EMS sub-modes.
-        """
-        if self.profile is not None:
-            idx   = min(step_idx, len(self.profile) - 1)
-            v_ref = float(self.profile[idx])
-            th, br = self.pi_ctrl.step(v_ref, speed_ms, 1.0)   # PI dt always 1 s
-            return th, br, v_ref
-
-        # Synthetic schedule (same as original standalone driver)
+    def _driver_inputs(self, t: float, speed_ms: float):
+        """Return (throttle, brake, None) from the synthetic schedule."""
         if t < 20:
             th = min(0.35, t / 20 * 0.35); br = 0.0
         elif t < 40:
@@ -1216,33 +1000,15 @@ class StandaloneSimulation:
 
     # ------------------------------------------------------------------
     def run(self):
-        """Execute one complete drive cycle and write KPIs to CSV.
+        """Execute one complete synthetic drive cycle and write KPIs to CSV."""
+        dt    = 0.05
+        steps = int(120.0 / dt)   # 2400
 
-        FTP-75 mode
-        -----------
-        Outer loop runs at **dt = 1.0 s** (1 Hz), yielding exactly 2474
-        logged timesteps — the value verified by the Day-1 checkpoint.
-        The THSIIController's internal ``_n_substeps = 10`` subdivides each
-        1-second tick into 0.1 s physics sub-steps for accuracy.
-
-        Synthetic mode
-        --------------
-        Keeps the original dt = 0.05 s cadence (2400 steps over 120 s).
-        """
-        if self.profile is not None:
-            # 1 Hz outer loop with exact standard-cycle row count.
-            dt    = 1.0
-            steps = len(self.profile)
-        else:
-            dt    = 0.05
-            steps = int(120.0 / dt)             # 2400
-
-        speed   = 0.0
-        profile = self.profile
+        speed = 0.0
 
         print(f"\n[THS-II] Standalone test | "
               f"mode={self.ems.state.selector_mode.value} | "
-              f"cycle={self.cycle_name if profile is not None else 'synthetic'} | "
+              f"cycle=synthetic | "
               f"steps={steps} | dt={dt} s …")
         print("=" * 62)
 
@@ -1254,7 +1020,7 @@ class StandaloneSimulation:
         try:
             for i in range(steps):
                 t = i * dt
-                throttle, brake, _ = self._driver_inputs(t, speed, step_idx=i)
+                throttle, brake, _ = self._driver_inputs(t, speed)
 
                 # external_resistance=True preserves numerical parity with
                 # the original standalone path (same flag, same equations).
@@ -1309,15 +1075,11 @@ class StandaloneSimulation:
         finally:
             csv_f.close()
 
-        self._print_summary(out, steps=steps,
-                            cycle_name=self.cycle_name if profile is not None else 'synthetic')
+        self._print_summary(out, steps=steps)
         print(f"  KPIs saved -> {self.csv_path}")
 
         if self.plot:
-            self._plot(self.ems.state.history,
-                       self.ems.state.selector_mode.value,
-                       self.profile,
-                       self.cycle_name if profile is not None else 'synthetic')
+            self._plot(self.ems.state.history, self.ems.state.selector_mode.value)
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -1345,18 +1107,13 @@ class StandaloneSimulation:
         )
 
     @staticmethod
-    def _print_summary(out, steps: int, cycle_name: str):
-        """Print final KPI summary matching the original format.
-
-        The ``soc_final`` and ``fuel_total_g`` labels match the Day-1
-        checkpoint wording: '2474 steps complete, fuel_g and soc_final printed'.
-        """
-        s = out  # last telemetry row
+    def _print_summary(out, steps: int):
+        s = out
         fuel_L = out.get('fuel_total_g', 0) / (0.74 * 1000)
         print("\n" + "=" * 60)
         print("  SIMULATION SUMMARY")
         print("=" * 60)
-        print(f"  Cycle:             {cycle_name}")
+        print(f"  Cycle:             synthetic")
         print(f"  Steps completed:   {steps}")
         print(f"  soc_final:         {s.get('soc_pct', 0):.2f} %")
         print(f"  fuel_total_g:      {s.get('fuel_total_g', 0):.1f} g  ({fuel_L:.3f} L)")
@@ -1367,9 +1124,7 @@ class StandaloneSimulation:
 
     # ------------------------------------------------------------------
     @staticmethod
-    def _plot(h: dict, mode_label: str,
-              reference_profile: np.ndarray = None,
-              cycle_name: str = 'synthetic'):
+    def _plot(h: dict, mode_label: str):
         """
         Produce an 8-subplot telemetry figure using matplotlib and save it
         to /tmp/ths2_standalone_v4.png (identical layout to original).
@@ -1426,10 +1181,6 @@ class StandaloneSimulation:
         a1.plot(t, speed, '#00d4ff', lw=1.5, label='Actual')
         a1.axhline(EV_SPEED_LIMIT_MS * 3.6, color='#2ecc71', ls='--', lw=0.8,
                    alpha=0.6, label='EV speed limit')
-        if reference_profile is not None:
-            tf = np.arange(len(reference_profile))
-            a1.plot(tf, reference_profile * 3.6, 'w--', lw=0.8,
-                    alpha=0.5, label=f'{cycle_name} ref')
         a1.legend(fontsize=7, labelcolor='white', facecolor='#1a1a2e')
         a1.set(ylabel='Speed (km/h)', title='Vehicle Speed', xlabel='Time (s)')
 
@@ -1556,20 +1307,12 @@ def main():
         epilog="""
 Examples
 --------
-  python modeling1.py --standalone
-  python modeling1.py --standalone --cycle FTP75 --plot
-  python modeling1.py --standalone --cycle WLTC --plot
-  python modeling1.py --standalone --drive-mode ECO --plot --csv results.csv
+  python modeling.py --standalone
+  python modeling.py --standalone --drive-mode ECO --plot --csv results.csv
 """
     )
     p.add_argument('--standalone',   action='store_true',
                    help='Run powertrain-only simulation (default if no flag given)')
-    p.add_argument('--ftp75',        action='store_true',
-                   help='Use FTP-75 drive cycle (alias for --cycle FTP75)')
-    p.add_argument('--cycle',        default='synthetic',
-                   choices=['synthetic', 'WLTC', 'FTP75', 'US06',
-                            'wltc', 'ftp75', 'us06'],
-                   help='Drive cycle: synthetic | WLTC | FTP75 | US06')
     p.add_argument('--plot',         action='store_true',
                    help='Save an 8-subplot telemetry figure to /tmp/')
     p.add_argument('--drive-mode',   default='AUTOMATIC', type=_parse_drive_mode,
@@ -1584,10 +1327,8 @@ Examples
     THSIIController.set_seed(args.seed)
 
     sim = StandaloneSimulation(
-        use_ftp75       = args.ftp75,
         plot            = args.plot,
         init_drive_mode = args.drive_mode,
-        cycle_name      = 'FTP75' if args.ftp75 else args.cycle,
         csv_path        = args.csv,
     )
     sim.run()
